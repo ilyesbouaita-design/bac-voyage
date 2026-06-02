@@ -87,6 +87,7 @@
 
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Poppins", "Inter", sans-serif;
+  --font-arabic: "Noto Sans Arabic", "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -95,6 +96,7 @@
   }
   html {
     -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
   }
   body {
     background-color: var(--background);
@@ -107,5 +109,6 @@
   /* Arabic interface flips direction; German learning content stays LTR via [dir=ltr] */
   [dir="rtl"] {
     text-align: right;
+    font-family: var(--font-arabic);
   }
 }
