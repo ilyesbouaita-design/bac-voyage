@@ -22,7 +22,13 @@ export const Route = createRootRoute({
           "Plateforme d'apprentissage de l'allemand pour le baccalauréat algérien.",
       },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap",
+      },
+    ],
   }),
   component: RootComponent,
 });
@@ -35,14 +41,19 @@ function RootComponent() {
   );
 }
 
-// Applies the saved theme before paint to avoid a flash. Default is light.
-const themeInit = `(function(){try{if(localStorage.getItem('theme')==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})();`;
+// Applies saved theme and locale before paint to avoid flashes.
+const initScript = `(function(){try{
+  var t=localStorage.getItem('theme');
+  if(t==='dark')document.documentElement.classList.add('dark');
+  var l=localStorage.getItem('locale');
+  if(l==='ar'){document.documentElement.lang='ar';document.documentElement.dir='rtl';}
+}catch(e){}})();`;
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" dir="ltr">
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+        <script dangerouslySetInnerHTML={{ __html: initScript }} />
         <HeadContent />
       </head>
       <body>
