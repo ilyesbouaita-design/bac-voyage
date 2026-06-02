@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/useAuth";
@@ -204,7 +204,7 @@ function AdminExams() {
               {t.admin_exams_subtitle ?? "Manage and publish your exams."}
             </p>
           </div>
-          <button className="inline-flex items-center gap-2 bg-brand-violet text-white px-5 py-2.5 rounded-xl font-medium text-sm hover:bg-brand-violet/90 transition-colors">
+          <Link to="/admin/exam-new" className="inline-flex items-center gap-2 bg-brand-violet text-white px-5 py-2.5 rounded-xl font-medium text-sm hover:bg-brand-violet/90 transition-colors">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="16"
@@ -220,7 +220,7 @@ function AdminExams() {
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
             {t.admin_exams_create ?? "Create exam"}
-          </button>
+          </Link>
         </div>
 
         {/* Search */}
