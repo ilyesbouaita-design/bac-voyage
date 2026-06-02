@@ -47,13 +47,20 @@ function CredentialIcon() {
 function LandingPage() {
   const { locale, t, setLocale } = useLocale();
   const navigate = useNavigate();
-  const [isAuthed, setIsAuthed] = useState(false);
 
+  // Redirect authenticated users to their dashboard
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setIsAuthed(true);
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.session.user.id)
+        .single();
+      const role = profile?.role ?? "student";
+      navigate({ to: role === "admin" ? "/admin" : "/dashboard" });
     });
-  }, []);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
