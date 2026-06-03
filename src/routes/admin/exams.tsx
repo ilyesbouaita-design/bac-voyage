@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/useAuth";
 import { useLocale } from "@/lib/useLocale";
 import { dashboardTranslations } from "@/lib/i18n-dashboard";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { getEinheitById } from "@/lib/einheiten";
 
 export const Route = createFileRoute("/admin/exams")({
   component: AdminExams,
@@ -108,6 +109,7 @@ interface Exam {
   id: string;
   title_fr: string;
   cefr_level: string;
+  slug: string | null;
   is_published: boolean;
   total_points: number;
   duration_minutes: number;
@@ -288,11 +290,17 @@ function AdminExams() {
                   <h2 className="font-semibold text-gray-900 text-base leading-snug line-clamp-2">
                     {exam.title_fr}
                   </h2>
-                  <span
-                    className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${cefrColor(exam.cefr_level)}`}
-                  >
-                    {exam.cefr_level}
-                  </span>
+                  {exam.slug && (() => {
+                    const einheit = getEinheitById(exam.slug);
+                    return einheit ? (
+                      <span
+                        className="flex-shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full"
+                        style={{ backgroundColor: einheit.color + "18", color: einheit.color }}
+                      >
+                        {einheit.icon} E{einheit.number}
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
 
                 {/* Status */}
