@@ -1,14 +1,17 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { EINHEITEN, getEinheitById } from "@/lib/einheiten";
 import { useAuth } from "@/lib/useAuth";
 import { useLocale } from "@/lib/useLocale";
-import { dashboardTranslations } from "@/lib/i18n-dashboard";
+import { dashboardTranslations, type DashboardTranslations } from "@/lib/i18n-dashboard";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { supabase } from "@/lib/supabase";
-import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/dashboard/bac")({
   component: BacPage,
 });
+
+// ─── Icons ───────────────────────────────────────────────────────────────────
 
 function SpinnerIcon() {
   return (
@@ -19,19 +22,8 @@ function SpinnerIcon() {
       viewBox="0 0 24 24"
       aria-hidden="true"
     >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-      />
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
   );
 }
@@ -45,7 +37,7 @@ function HomeIcon() {
   );
 }
 
-function PenToolIcon() {
+function PenIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
       <path d="m12 19 7-7 3 3-7 7-3-3z" />
@@ -56,7 +48,7 @@ function PenToolIcon() {
   );
 }
 
-function BookOpenIcon() {
+function BookIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
       <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
@@ -65,7 +57,7 @@ function BookOpenIcon() {
   );
 }
 
-function GraduationCapIcon() {
+function GradCapIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
       <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
@@ -74,18 +66,27 @@ function GraduationCapIcon() {
   );
 }
 
-function EmptyIcon() {
+function ArrowRightIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-12 h-12 text-gray-300">
-      <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
-      <path d="M6 12v5c3 3 9 3 12 0v-5" />
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </svg>
+  );
+}
+
+function ArrowLeftIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <path d="M19 12H5" />
+      <path d="m12 19-7-7 7-7" />
     </svg>
   );
 }
 
 function ClockIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 inline-block">
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
     </svg>
@@ -94,20 +95,13 @@ function ClockIcon() {
 
 function StarIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 inline-block">
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
     </svg>
   );
 }
 
-const cefrColors: Record<string, string> = {
-  A1: "bg-green-100 text-green-700",
-  A2: "bg-lime-100 text-lime-700",
-  B1: "bg-yellow-100 text-yellow-700",
-  B2: "bg-orange-100 text-orange-700",
-  C1: "bg-red-100 text-red-700",
-  C2: "bg-purple-100 text-purple-700",
-};
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type AttemptStatus = "in_progress" | "submitted" | "graded";
 
@@ -122,6 +116,7 @@ interface Exam {
   id: string;
   title_fr: string;
   title_ar: string;
+  slug: string;
   cefr_level?: string;
   duration_minutes?: number;
   total_points?: number;
@@ -129,35 +124,163 @@ interface Exam {
   attempt?: ExamAttempt | null;
 }
 
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function AttemptBadge({ attempt, t }: { attempt: ExamAttempt; t: DashboardTranslations }) {
+  if (attempt.status === "in_progress") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700" style={{ fontSize: "11px", fontWeight: 600 }}>
+        {t.exam_in_progress}
+      </span>
+    );
+  }
+  if (attempt.status === "submitted") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700" style={{ fontSize: "11px", fontWeight: 600 }}>
+        {t.exam_submitted}
+      </span>
+    );
+  }
+  if (attempt.status === "graded") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700" style={{ fontSize: "11px", fontWeight: 600 }}>
+        {t.exam_graded}
+        {attempt.score !== null && attempt.max_score !== null
+          ? ` ${attempt.score}/${attempt.max_score}`
+          : ""}
+      </span>
+    );
+  }
+  return null;
+}
+
+function ExamActionButton({
+  attempt,
+  examId,
+  t,
+}: {
+  attempt: ExamAttempt | null | undefined;
+  examId: string;
+  t: DashboardTranslations;
+}) {
+  const navigate = useNavigate();
+
+  if (!attempt) {
+    return (
+      <button
+        type="button"
+        className="mt-auto w-full rounded-xl bg-brand-coral text-white font-semibold py-2 px-4 hover:bg-brand-coral/90 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-coral focus:ring-offset-2"
+        style={{ fontSize: "12px" }}
+        onClick={() => navigate({ to: `/dashboard/exam/${examId}` })}
+      >
+        {t.exam_start}
+      </button>
+    );
+  }
+  if (attempt.status === "in_progress") {
+    return (
+      <button
+        type="button"
+        className="mt-auto w-full rounded-xl bg-yellow-500 text-white font-semibold py-2 px-4 hover:bg-yellow-400 transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2"
+        style={{ fontSize: "12px" }}
+        onClick={() => navigate({ to: `/dashboard/exam/${examId}` })}
+      >
+        Continuer
+      </button>
+    );
+  }
+  if (attempt.status === "graded") {
+    return (
+      <button
+        type="button"
+        className="mt-auto w-full rounded-xl bg-green-600 text-white font-semibold py-2 px-4 hover:bg-green-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+        style={{ fontSize: "12px" }}
+        onClick={() => navigate({ to: `/dashboard/exam/${examId}` })}
+      >
+        {t.exam_results}
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled
+      className="mt-auto w-full rounded-xl bg-blue-200 text-blue-700 font-semibold py-2 px-4 cursor-not-allowed"
+      style={{ fontSize: "12px" }}
+    >
+      {t.exam_submitted}
+    </button>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
 function BacPage() {
   const auth = useAuth("student");
-  const { locale } = useLocale();
+  const { locale, setLocale } = useLocale();
   const t = dashboardTranslations[locale];
 
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [dataLoading, setDataLoading] = useState(true);
+  // null = unit list view; string = unit detail view (einheit-XX)
+  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
+
+  // exam counts per slug for unit list view
+  const [examCounts, setExamCounts] = useState<Record<string, number>>({});
+  const [countsLoading, setCountsLoading] = useState(true);
+
+  // exams for the selected unit detail view
+  const [unitExams, setUnitExams] = useState<Exam[]>([]);
+  const [unitExamsLoading, setUnitExamsLoading] = useState(false);
 
   const sidebarItems = [
     { label: t.sidebar_overview, to: "/dashboard", icon: <HomeIcon /> },
-    { label: t.sidebar_grammar, to: "/dashboard/grammatik", icon: <PenToolIcon /> },
-    { label: t.sidebar_vocabulary, to: "/dashboard/wortschatz", icon: <BookOpenIcon /> },
-    { label: t.sidebar_exams, to: "/dashboard/bac", icon: <GraduationCapIcon /> },
+    { label: t.sidebar_grammar, to: "/dashboard/grammatik", icon: <PenIcon /> },
+    { label: t.sidebar_vocabulary, to: "/dashboard/wortschatz", icon: <BookIcon /> },
+    { label: t.sidebar_exams, to: "/dashboard/bac", icon: <GradCapIcon /> },
   ];
 
+  // Fetch exam counts once on mount
   useEffect(() => {
-    async function fetchExams() {
-      if (!auth.userId) return;
-      setDataLoading(true);
+    async function fetchCounts() {
+      setCountsLoading(true);
+      const { data, error } = await supabase
+        .from("exams")
+        .select("slug")
+        .eq("is_published", true);
+
+      if (!error && data) {
+        const counts: Record<string, number> = {};
+        for (const row of data) {
+          if (row.slug) {
+            counts[row.slug] = (counts[row.slug] ?? 0) + 1;
+          }
+        }
+        setExamCounts(counts);
+      }
+      setCountsLoading(false);
+    }
+
+    if (!auth.loading) {
+      fetchCounts();
+    }
+  }, [auth.loading]);
+
+  // Fetch exams for selected unit
+  useEffect(() => {
+    if (!selectedUnit || !auth.userId) return;
+
+    async function fetchUnitExams() {
+      setUnitExamsLoading(true);
 
       const { data: examsData, error } = await supabase
         .from("exams")
-        .select("id, title_fr, title_ar, cefr_level, duration_minutes, total_points, created_at")
+        .select("id, title_fr, title_ar, slug, cefr_level, duration_minutes, total_points, created_at")
+        .eq("slug", selectedUnit)
         .eq("is_published", true)
         .order("created_at", { ascending: false });
 
       if (error || !examsData) {
-        setExams([]);
-        setDataLoading(false);
+        setUnitExams([]);
+        setUnitExamsLoading(false);
         return;
       }
 
@@ -174,14 +297,12 @@ function BacPage() {
         })
       );
 
-      setExams(examsWithAttempts);
-      setDataLoading(false);
+      setUnitExams(examsWithAttempts);
+      setUnitExamsLoading(false);
     }
 
-    if (!auth.loading) {
-      fetchExams();
-    }
-  }, [auth.loading, auth.userId]);
+    fetchUnitExams();
+  }, [selectedUnit, auth.userId, auth.loading]);
 
   if (auth.loading) {
     return (
@@ -191,165 +312,205 @@ function BacPage() {
     );
   }
 
-  const isEmpty = !dataLoading && exams.length === 0;
-
-  function AttemptBadge({ attempt }: { attempt: ExamAttempt }) {
-    if (attempt.status === "in_progress") {
-      return (
-        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
-          {t.attempt_in_progress}
-        </span>
-      );
-    }
-    if (attempt.status === "submitted") {
-      return (
-        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-          {t.attempt_submitted}
-        </span>
-      );
-    }
-    if (attempt.status === "graded") {
-      return (
-        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-          {t.attempt_graded} {attempt.score !== null && attempt.max_score !== null
-            ? `${attempt.score}/${attempt.max_score}`
-            : ""}
-        </span>
-      );
-    }
-    return null;
-  }
-
-  function ExamActionButton({ attempt, examId }: { attempt: ExamAttempt | null | undefined; examId: string }) {
-    if (!attempt) {
-      return (
-        <button
-          type="button"
-          className="mt-auto w-full rounded-xl bg-brand-coral text-white text-sm font-semibold py-2 px-4 hover:bg-brand-coral/90 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-coral focus:ring-offset-2"
-          onClick={() => {
-            // TODO: navigate to exam
-            console.log("Start exam", examId);
-          }}
-        >
-          {t.exam_start}
-        </button>
-      );
-    }
-    if (attempt.status === "in_progress") {
-      return (
-        <button
-          type="button"
-          className="mt-auto w-full rounded-xl bg-yellow-500 text-white text-sm font-semibold py-2 px-4 hover:bg-yellow-400 transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-2"
-          onClick={() => {
-            // TODO: navigate to exam continuation
-            console.log("Continue exam", examId);
-          }}
-        >
-          {t.exam_continue}
-        </button>
-      );
-    }
-    if (attempt.status === "graded") {
-      return (
-        <button
-          type="button"
-          className="mt-auto w-full rounded-xl bg-green-600 text-white text-sm font-semibold py-2 px-4 hover:bg-green-500 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-          onClick={() => {
-            // TODO: navigate to results
-            console.log("View results", examId);
-          }}
-        >
-          {t.exam_view_results}
-        </button>
-      );
-    }
-    // submitted — read only, no action for now
-    return (
-      <button
-        type="button"
-        disabled
-        className="mt-auto w-full rounded-xl bg-blue-200 text-blue-700 text-sm font-semibold py-2 px-4 cursor-not-allowed"
-      >
-        {t.exam_awaiting_grade}
-      </button>
-    );
-  }
+  const pageTitle = locale === "ar" ? "Bac — الامتحانات" : "Bac — Examens";
+  const pageSubtitle = locale === "ar" ? "اختر وحدة للتدرب على امتحانات البكالوريا" : "Choisissez une unité pour vous entraîner aux examens du Bac";
 
   return (
-    <DashboardLayout sidebarItems={sidebarItems} user={auth}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Bac — Examens</h1>
-          <p className="mt-1 text-gray-500">{t.exams_subtitle}</p>
-        </div>
+    <DashboardLayout
+      role="student"
+      t={t}
+      locale={locale}
+      onLocaleChange={setLocale}
+      displayName={auth.displayName}
+      navItems={sidebarItems}
+    >
+      <div style={{ fontFamily: "'Times New Roman', Georgia, serif", fontSize: "12px" }}>
 
-        {/* Loading state */}
-        {dataLoading && (
-          <div className="flex items-center justify-center py-16">
-            <SpinnerIcon />
+        {/* ── UNIT LIST VIEW ─────────────────────────────────────────────── */}
+        {selectedUnit === null && (
+          <div className="space-y-6">
+            {/* Header */}
+            <div>
+              <h1 className="font-bold text-gray-900" style={{ fontSize: "22px" }}>{pageTitle}</h1>
+              <p className="mt-1 text-gray-500" style={{ fontSize: "12px" }}>{pageSubtitle}</p>
+            </div>
+
+            {/* Loading */}
+            {countsLoading && (
+              <div className="flex items-center justify-center py-16">
+                <SpinnerIcon />
+              </div>
+            )}
+
+            {/* Units grid */}
+            {!countsLoading && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {EINHEITEN.map((einheit) => {
+                  const count = examCounts[einheit.id] ?? 0;
+                  const subtitle = locale === "ar" ? einheit.title_ar : einheit.title_fr;
+                  const examLabel = locale === "ar"
+                    ? `${count} امتحانات متاحة`
+                    : `${count} examen${count !== 1 ? "s" : ""} disponible${count !== 1 ? "s" : ""}`;
+
+                  return (
+                    <button
+                      key={einheit.id}
+                      type="button"
+                      onClick={() => setSelectedUnit(einheit.id)}
+                      className="text-left w-full rounded-2xl bg-white border border-gray-100 shadow-sm p-5 flex items-center gap-4 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                      style={{ fontFamily: "'Times New Roman', Georgia, serif", fontSize: "12px" }}
+                    >
+                      {/* Left colored border */}
+                      <div
+                        className="self-stretch w-1 rounded-full shrink-0"
+                        style={{ backgroundColor: einheit.color, minWidth: "4px" }}
+                      />
+
+                      {/* Icon + badge */}
+                      <div className="shrink-0 flex flex-col items-center gap-1">
+                        <span style={{ fontSize: "28px" }}>{einheit.icon}</span>
+                        <span
+                          className="px-2 py-0.5 rounded-full text-white font-semibold"
+                          style={{ backgroundColor: einheit.color, fontSize: "10px" }}
+                        >
+                          Einheit {einheit.number}
+                        </span>
+                      </div>
+
+                      {/* Text content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-gray-900 truncate" style={{ fontSize: "13px" }}>
+                          {einheit.title_de}
+                        </div>
+                        <div className="text-gray-500 truncate mt-0.5" style={{ fontSize: "12px" }}>
+                          {subtitle}
+                        </div>
+                        <div className="mt-1.5 text-gray-400" style={{ fontSize: "11px" }}>
+                          {examLabel}
+                        </div>
+                      </div>
+
+                      {/* Arrow */}
+                      <div className="text-gray-400 shrink-0">
+                        <ArrowRightIcon />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Empty state */}
-        {isEmpty && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <EmptyIcon />
-            <p className="mt-4 text-gray-500 font-medium">{t.empty_exams}</p>
-            <p className="text-sm text-gray-400 mt-1">{t.empty_exams_hint}</p>
-          </div>
-        )}
+        {/* ── UNIT DETAIL VIEW ───────────────────────────────────────────── */}
+        {selectedUnit !== null && (() => {
+          const einheit = getEinheitById(selectedUnit);
+          if (!einheit) return null;
+          const subtitle = locale === "ar" ? einheit.title_ar : einheit.title_fr;
+          const backLabel = locale === "ar" ? "العودة إلى الوحدات" : "Retour aux unités";
+          const emptyLabel = locale === "ar"
+            ? "لا توجد امتحانات في هذه الوحدة بعد."
+            : "Aucun examen disponible dans cette unité.";
 
-        {/* Exams grid */}
-        {!dataLoading && exams.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {exams.map((exam) => {
-              const title = locale === "ar" ? exam.title_ar : exam.title_fr;
-              const cefrClass = exam.cefr_level
-                ? (cefrColors[exam.cefr_level] ?? "bg-gray-100 text-gray-600")
-                : "bg-gray-100 text-gray-600";
-
-              return (
-                <div
-                  key={exam.id}
-                  className="rounded-2xl bg-white shadow-sm border border-gray-100 p-5 flex flex-col gap-3 hover:shadow-md transition-shadow"
+          return (
+            <div className="space-y-6">
+              {/* Back button + unit header */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedUnit(null);
+                    setUnitExams([]);
+                  }}
+                  className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-colors mb-4"
+                  style={{ fontSize: "12px" }}
                 >
-                  {/* Badges row */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {exam.cefr_level && (
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cefrClass}`}>
-                        {exam.cefr_level}
+                  <ArrowLeftIcon />
+                  {backLabel}
+                </button>
+
+                <div className="flex items-center gap-3">
+                  <span style={{ fontSize: "30px" }}>{einheit.icon}</span>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h1 className="font-bold text-gray-900" style={{ fontSize: "20px" }}>
+                        Einheit {einheit.number}: {einheit.title_de}
+                      </h1>
+                      <span
+                        className="px-2 py-0.5 rounded-full text-white font-semibold"
+                        style={{ backgroundColor: einheit.color, fontSize: "10px" }}
+                      >
+                        Einheit {einheit.number}
                       </span>
-                    )}
-                    {exam.attempt && <AttemptBadge attempt={exam.attempt} />}
+                    </div>
+                    <p className="text-gray-500 mt-0.5" style={{ fontSize: "12px" }}>{subtitle}</p>
                   </div>
-
-                  {/* Title */}
-                  <h3 className="font-semibold text-gray-900 leading-snug">{title}</h3>
-
-                  {/* Meta info */}
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
-                    {exam.duration_minutes != null && (
-                      <span className="flex items-center gap-1">
-                        <ClockIcon />
-                        {exam.duration_minutes} {t.exam_minutes_label}
-                      </span>
-                    )}
-                    {exam.total_points != null && (
-                      <span className="flex items-center gap-1">
-                        <StarIcon />
-                        {exam.total_points} {t.exam_points_label}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Action button */}
-                  <ExamActionButton attempt={exam.attempt} examId={exam.id} />
                 </div>
-              );
-            })}
-          </div>
-        )}
+              </div>
+
+              {/* Loading */}
+              {unitExamsLoading && (
+                <div className="flex items-center justify-center py-16">
+                  <SpinnerIcon />
+                </div>
+              )}
+
+              {/* Empty state */}
+              {!unitExamsLoading && unitExams.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <span style={{ fontSize: "48px" }}>📄</span>
+                  <p className="mt-4 text-gray-500 font-medium" style={{ fontSize: "12px" }}>{emptyLabel}</p>
+                </div>
+              )}
+
+              {/* Exam cards */}
+              {!unitExamsLoading && unitExams.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {unitExams.map((exam) => {
+                    const title = locale === "ar" ? exam.title_ar : exam.title_fr;
+                    return (
+                      <div
+                        key={exam.id}
+                        className="rounded-2xl bg-white shadow-sm border border-gray-100 p-5 flex flex-col gap-3 hover:shadow-md transition-shadow"
+                        style={{ borderLeftWidth: "4px", borderLeftColor: einheit.color }}
+                      >
+                        {/* Attempt badge */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {exam.attempt && <AttemptBadge attempt={exam.attempt} t={t} />}
+                        </div>
+
+                        {/* Title */}
+                        <h3 className="font-semibold text-gray-900 leading-snug" style={{ fontSize: "13px" }}>
+                          {title}
+                        </h3>
+
+                        {/* Meta */}
+                        <div className="flex items-center gap-4 text-gray-500" style={{ fontSize: "12px" }}>
+                          {exam.duration_minutes != null && (
+                            <span className="flex items-center gap-1">
+                              <ClockIcon />
+                              {exam.duration_minutes} min
+                            </span>
+                          )}
+                          {exam.total_points != null && (
+                            <span className="flex items-center gap-1">
+                              <StarIcon />
+                              {exam.total_points} pts
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Action */}
+                        <ExamActionButton attempt={exam.attempt} examId={exam.id} t={t} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
       </div>
     </DashboardLayout>
   );

@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { EINHEITEN } from "@/lib/einheiten";
 import { useAuth } from "@/lib/useAuth";
 import { useLocale } from "@/lib/useLocale";
 import { dashboardTranslations } from "@/lib/i18n-dashboard";
@@ -113,6 +114,7 @@ interface ExamMetadata {
   title_ar: string;
   description_fr: string;
   description_ar: string;
+  einheit: string;
   cefr_level: string;
   duration_minutes: number;
 }
@@ -142,7 +144,8 @@ function BacBuilderPage() {
     title_ar: "",
     description_fr: "",
     description_ar: "",
-    cefr_level: "B1",
+    einheit: "einheit-01",
+    cefr_level: "",
     duration_minutes: 90,
   });
 
@@ -260,6 +263,7 @@ function BacBuilderPage() {
           title_ar: meta.title_ar || null,
           description_fr: meta.description_fr || null,
           description_ar: meta.description_ar || null,
+          slug: meta.einheit || null,
           cefr_level: meta.cefr_level || null,
           duration_minutes: meta.duration_minutes || null,
           total_points: totalPoints,
@@ -462,11 +466,14 @@ function BacBuilderPage() {
               <span className="font-bold" style={{ fontSize: "13px" }}>
                 {meta.title_fr || "Nouvel examen"}
               </span>
-              {meta.cefr_level && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#6C4CE0]/10 text-[#6C4CE0]">
-                  {meta.cefr_level}
-                </span>
-              )}
+              {meta.einheit && (() => {
+                const e = EINHEITEN.find((u) => u.id === meta.einheit);
+                return e ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#6C4CE0]/10 text-[#6C4CE0]">
+                    {e.icon} Einheit {e.number}: {e.title_de}
+                  </span>
+                ) : null;
+              })()}
             </div>
             <div className="flex items-center gap-3">
               <span className="text-muted-foreground" style={{ fontSize: "11px" }}>
@@ -619,15 +626,28 @@ function BacBuilderPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
             <div>
-              <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Niveau CECR</label>
-              <select className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none" style={tmr} value={meta.cefr_level} onChange={(e) => setMeta((m) => ({ ...m, cefr_level: e.target.value }))}>
-                <option value="A1">A1</option><option value="A2">A2</option>
-                <option value="B1">B1</option><option value="B2">B2</option>
+              <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Einheit (Unit&eacute; th&eacute;matique)</label>
+              <select className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none transition focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15" style={tmr} value={meta.einheit} onChange={(e) => setMeta((m) => ({ ...m, einheit: e.target.value }))}>
+                {EINHEITEN.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.icon} Einheit {e.number}: {e.title_de} &mdash; {e.title_fr}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
               <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Dur&eacute;e (minutes)</label>
               <input type="number" className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none transition focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15" style={tmr} value={meta.duration_minutes} onChange={(e) => setMeta((m) => ({ ...m, duration_minutes: parseInt(e.target.value) || 0 }))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Niveau CECR <span className="font-normal text-muted-foreground">(optionnel)</span></label>
+              <select className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none" style={tmr} value={meta.cefr_level} onChange={(e) => setMeta((m) => ({ ...m, cefr_level: e.target.value }))}>
+                <option value="">— non sp&eacute;cifi&eacute; —</option>
+                <option value="A1">A1</option><option value="A2">A2</option>
+                <option value="B1">B1</option><option value="B2">B2</option>
+              </select>
             </div>
           </div>
         </div>
