@@ -257,11 +257,17 @@ function BacBuilderPage() {
       return;
     }
 
-    // Demo mode — can't save to Supabase
+    // Demo mode — can't save to Supabase (only if no real session)
     const isDemo = typeof localStorage !== "undefined" && localStorage.getItem("demo-mode") === "true";
-    if (isDemo) {
-      toast.success("Mode démo — Aperçu de la sauvegarde réussi ! Connectez-vous avec un vrai compte pour sauvegarder.");
+    if (isDemo && !userId) {
+      toast.info("Mode démo — Connectez-vous avec un vrai compte pour sauvegarder.");
       return;
+    }
+    // Clear demo flag if user has a real session
+    if (isDemo && userId) {
+      localStorage.removeItem("demo-mode");
+      localStorage.removeItem("demo-role");
+      localStorage.removeItem("demo-user");
     }
 
     setSaving(true);
@@ -284,7 +290,11 @@ function BacBuilderPage() {
         .select()
         .single();
 
-      if (examErr || !exam) throw examErr || new Error("Failed to create exam");
+      if (examErr || !exam) {
+        console.error("Exam insert error:", examErr);
+        throw examErr || new Error("Failed to create exam");
+      }
+      console.log("Exam created:", exam.id);
 
       // 2. Create Textverständnis section
       const { data: tvSec } = await supabase
