@@ -15,7 +15,7 @@ const FONT_STYLE: React.CSSProperties = {
   fontSize: "12px",
 };
 
-export default function KombinierenCard({
+export function KombinierenCard({
   left_items,
   right_items,
   answer_key,
@@ -218,3 +218,5 @@ export default function KombinierenCard({
     </div>
   );
 }
+
+export default KombinierenCard;

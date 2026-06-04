@@ -41,7 +41,7 @@ function splitSentence(
 // Component
 // ---------------------------------------------------------------------------
 
-export default function SynonymGegenteilCard({
+export function SynonymGegenteilCard({
   type,
   sentence,
   target_word,
@@ -177,3 +177,5 @@ export default function SynonymGegenteilCard({
     </div>
   );
 }
+
+export default SynonymGegenteilCard;

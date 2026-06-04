@@ -60,7 +60,7 @@ const FEEDBACK_STYLES: Record<
 // Component
 // ---------------------------------------------------------------------------
 
-export default function UebersetzungCard({
+export function UebersetzungCard({
   german_sentence,
   accepted_translations,
   points,
@@ -200,3 +200,5 @@ export default function UebersetzungCard({
     </div>
   );
 }
+
+export default UebersetzungCard;

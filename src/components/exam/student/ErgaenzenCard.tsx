@@ -23,7 +23,7 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-export default function ErgaenzenCard({
+export function ErgaenzenCard({
   sentences,
   onAnswersChange,
   showResults = false,
@@ -260,6 +260,8 @@ export default function ErgaenzenCard({
     </div>
   );
 }
+
+export default ErgaenzenCard;
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

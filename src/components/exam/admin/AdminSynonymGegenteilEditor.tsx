@@ -16,7 +16,7 @@ const FONT = { fontFamily: "'Times New Roman', Georgia, serif", fontSize: "12px"
 const inputCls =
   "w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none transition focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15";
 
-export default function AdminSynonymGegenteilEditor({
+export function AdminSynonymGegenteilEditor({
   type,
   value,
   onChange,
@@ -299,6 +299,8 @@ export default function AdminSynonymGegenteilEditor({
     </div>
   );
 }
+
+export default AdminSynonymGegenteilEditor;
 
 function escapeRegex(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

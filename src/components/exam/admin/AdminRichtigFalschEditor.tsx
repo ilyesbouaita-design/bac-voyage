@@ -17,7 +17,7 @@ const emptyStatement = () => ({
   points: 1.75,
 });
 
-export default function AdminRichtigFalschEditor({
+export function AdminRichtigFalschEditor({
   value,
   onChange,
 }: AdminRichtigFalschEditorProps) {
@@ -185,3 +185,5 @@ export default function AdminRichtigFalschEditor({
     </div>
   );
 }
+
+export default AdminRichtigFalschEditor;

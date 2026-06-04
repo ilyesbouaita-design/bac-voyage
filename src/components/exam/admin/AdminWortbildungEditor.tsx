@@ -56,7 +56,7 @@ function useWortableitungDraft(initial: AdminWortbildungEditorProps["value"]) {
   return useState<WortableitungContent>(initWort);
 }
 
-export default function AdminWortbildungEditor({
+export function AdminWortbildungEditor({
   value,
   onChange,
 }: AdminWortbildungEditorProps) {
@@ -441,3 +441,5 @@ export default function AdminWortbildungEditor({
     </div>
   );
 }
+
+export default AdminWortbildungEditor;

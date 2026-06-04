@@ -1041,7 +1041,7 @@ function satzbauClauseToFreeKey(clause_type: string): FreeChoiceKey | null {
 // Main component
 // ─────────────────────────────────────────────
 
-export default function AdminGrammatikEditor({
+export function AdminGrammatikEditor({
   value,
   onChange,
   grammarType,
@@ -1187,6 +1187,8 @@ export default function AdminGrammatikEditor({
     </div>
   );
 }
+
+export default AdminGrammatikEditor;
 
 // ─────────────────────────────────────────────
 // Helpers

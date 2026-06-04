@@ -20,7 +20,7 @@ const defaultContent = (): KombinierenContent => ({
   answer_key: { a: "1", b: "2", c: "3", d: "4" },
 });
 
-export default function AdminKombinierenEditor({
+export function AdminKombinierenEditor({
   value,
   onChange,
 }: AdminKombinierenEditorProps) {
@@ -180,3 +180,5 @@ export default function AdminKombinierenEditor({
     </div>
   );
 }
+
+export default AdminKombinierenEditor;

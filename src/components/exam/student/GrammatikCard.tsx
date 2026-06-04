@@ -896,7 +896,7 @@ function KonnektorenVariant({
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function GrammatikCard(props: GrammatikCardProps) {
+export function GrammatikCard(props: GrammatikCardProps) {
   return (
     <div
       className="rounded-2xl border border-border bg-card shadow-sm p-5"
@@ -914,3 +914,5 @@ export default function GrammatikCard(props: GrammatikCardProps) {
     </div>
   );
 }
+
+export default GrammatikCard;

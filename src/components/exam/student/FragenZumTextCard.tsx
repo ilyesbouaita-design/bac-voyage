@@ -65,7 +65,7 @@ function AutoGrowTextarea({
   );
 }
 
-export default function FragenZumTextCard({
+export function FragenZumTextCard({
   questions,
   onAnswersChange,
   showResults = false,
@@ -213,3 +213,5 @@ export default function FragenZumTextCard({
     </div>
   );
 }
+
+export default FragenZumTextCard;

@@ -440,7 +440,7 @@ function ResultBadge({
 // Main export – routes to correct variant
 // ---------------------------------------------------------------------------
 
-export default function WortbildungCard(props: WortbildungCardProps) {
+export function WortbildungCard(props: WortbildungCardProps) {
   if (props.variant === "kompositum_bilden") {
     return <KompositumBilden {...props} />;
   }
@@ -449,3 +449,5 @@ export default function WortbildungCard(props: WortbildungCardProps) {
   }
   return <Wortableitung {...props} />;
 }
+
+export default WortbildungCard;

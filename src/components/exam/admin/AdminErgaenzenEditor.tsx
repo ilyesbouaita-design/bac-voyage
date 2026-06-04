@@ -31,7 +31,7 @@ function tokenize(text: string): string[] {
   return text.split(/\s+/).filter(Boolean);
 }
 
-export default function AdminErgaenzenEditor({
+export function AdminErgaenzenEditor({
   value,
   onChange,
 }: AdminErgaenzenEditorProps) {
@@ -319,3 +319,5 @@ export default function AdminErgaenzenEditor({
     </div>
   );
 }
+
+export default AdminErgaenzenEditor;
