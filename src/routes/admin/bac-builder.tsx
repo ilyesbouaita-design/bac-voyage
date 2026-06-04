@@ -290,9 +290,6 @@ function BacBuilderPage() {
       const { data: exam, error: examErr } = await supabase
         .from("exams")
         .insert(examInsert)
-          created_by: userId,
-          is_published: false,
-        })
         .select()
         .single();
 
