@@ -1,7 +1,8 @@
 import { Link, useNavigate, useMatchRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
-import type { DashboardTranslations } from "@/lib/i18n-dashboard";
+import { dashboardTranslations, type DashboardTranslations } from "@/lib/i18n-dashboard";
+import { useLocale } from "@/lib/useLocale";
 import type { Locale } from "@/lib/i18n";
 
 interface NavItem {
@@ -12,26 +13,33 @@ interface NavItem {
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
-  t: DashboardTranslations;
-  locale: Locale;
-  onLocaleChange: (locale: Locale) => void;
+  t?: DashboardTranslations;
+  locale?: Locale;
+  onLocaleChange?: (locale: Locale) => void;
   role: "admin" | "student";
-  displayName: string | null;
+  displayName?: string | null;
   navItems: NavItem[];
 }
 
 export function DashboardLayout({
   children,
-  t,
-  locale,
-  onLocaleChange,
+  t: tProp,
+  locale: localeProp,
+  onLocaleChange: onLocaleChangeProp,
   role,
-  displayName,
+  displayName: displayNameProp,
   navItems,
 }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const matchRoute = useMatchRoute();
+  const localeHook = useLocale();
+
+  // Fallbacks: use props if provided, otherwise use hook/defaults
+  const locale = localeProp ?? localeHook.locale;
+  const t = tProp ?? dashboardTranslations[locale] ?? dashboardTranslations["fr"];
+  const onLocaleChange = onLocaleChangeProp ?? localeHook.setLocale;
+  const displayName = displayNameProp ?? null;
 
   function toggleTheme() {
     const el = document.documentElement;
@@ -45,6 +53,9 @@ export function DashboardLayout({
 
   async function handleLogout() {
     await supabase.auth.signOut();
+    localStorage.removeItem("demo-mode");
+    localStorage.removeItem("demo-role");
+    localStorage.removeItem("demo-user");
     navigate({ to: "/login" });
   }
 

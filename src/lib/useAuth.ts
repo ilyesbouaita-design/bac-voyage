@@ -30,7 +30,33 @@ const initialState: AuthState = {
 };
 
 /**
+ * Check if we're in demo mode (set by /demo route).
+ */
+function getDemoUser(): AuthState | null {
+  try {
+    if (localStorage.getItem("demo-mode") !== "true") return null;
+    const raw = localStorage.getItem("demo-user");
+    if (!raw) return null;
+    const u = JSON.parse(raw);
+    return {
+      loading: false,
+      userId: u.id ?? "demo-user-001",
+      email: u.email ?? "demo@bacallemand.com",
+      role: (u.role ?? "student") as UserRole,
+      displayName: u.display_name ?? "Demo User",
+      avatarUrl: null,
+      xp: u.xp ?? 0,
+      level: u.level ?? 1,
+      currentStreak: u.current_streak ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Hook that loads the current user session + profile.
+ * Supports demo mode (localStorage) and real Supabase auth.
  * - If not authenticated, redirects to /login.
  * - If `requiredRole` is set and doesn't match, redirects to the correct dashboard.
  */
@@ -42,6 +68,20 @@ export function useAuth(requiredRole?: UserRole): AuthState {
     let active = true;
 
     async function load() {
+      // Check demo mode first
+      const demoUser = getDemoUser();
+      if (demoUser) {
+        if (!active) return;
+        // Role-based redirect in demo mode
+        if (requiredRole && demoUser.role !== requiredRole) {
+          navigate({ to: demoUser.role === "admin" ? "/admin" : "/dashboard" });
+          return;
+        }
+        setState(demoUser);
+        return;
+      }
+
+      // Real Supabase auth
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -83,7 +123,7 @@ export function useAuth(requiredRole?: UserRole): AuthState {
     load();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session && active) {
+      if (!session && active && !getDemoUser()) {
         navigate({ to: "/login" });
       }
     });
