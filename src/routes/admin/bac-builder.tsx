@@ -157,10 +157,10 @@ function BacBuilderPage() {
   const [richtigFalsch, setRichtigFalsch] = useState<RichtigFalschContent>({
     bac_type: "richtig_falsch_zitat",
     statements: [
-      { text: "", is_richtig: true, zitat: "", points: 1.75 },
-      { text: "", is_richtig: true, zitat: "", points: 1.75 },
-      { text: "", is_richtig: false, zitat: "", points: 1.75 },
-      { text: "", is_richtig: true, zitat: "", points: 1.75 },
+      { text: "", is_richtig: true, zitat: "", points: 2 },
+      { text: "", is_richtig: true, zitat: "", points: 2 },
+      { text: "", is_richtig: false, zitat: "", points: 2 },
+      { text: "", is_richtig: true, zitat: "", points: 2 },
     ],
   });
 
@@ -326,7 +326,7 @@ function BacBuilderPage() {
           type: "true_false",
           content: richtigFalsch,
           prompt_fr: "Richtig oder falsch?",
-          points: richtigFalsch.statements.reduce((s, st) => s + st.points, 0),
+          points: Math.round(richtigFalsch.statements.reduce((s, st) => s + st.points, 0)),
           grade_method: "ai",
           order_index: 0,
         });
@@ -338,7 +338,7 @@ function BacBuilderPage() {
             type: "short_text",
             content: fragen[i].content,
             prompt_fr: fragen[i].content.question,
-            points: fragen[i].points,
+            points: Math.round(fragen[i].points),
             grade_method: "ai",
             order_index: i + 1,
           });
@@ -406,15 +406,15 @@ function BacBuilderPage() {
         });
         await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "fill_blank", content: wortbildung,
-          prompt_fr: "Wortbildung", points: 0.5, grade_method: "auto", order_index: idx++,
+          prompt_fr: "Wortbildung", points: 1, grade_method: "auto", order_index: idx++,
         });
         await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "fill_blank", content: wortableitung,
-          prompt_fr: "Wortableitung", points: 0.5, grade_method: "auto", order_index: idx++,
+          prompt_fr: "Wortableitung", points: 1, grade_method: "auto", order_index: idx++,
         });
         await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "short_text", content: uebersetzung,
-          prompt_fr: "Übersetzung", points: 1.5, grade_method: "ai", order_index: idx++,
+          prompt_fr: "Übersetzung", points: 2, grade_method: "ai", order_index: idx++,
         });
 
         // Grammatik 1-3
