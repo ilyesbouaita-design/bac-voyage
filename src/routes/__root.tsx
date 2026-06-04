@@ -24,10 +24,6 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap",
-      },
     ],
   }),
   component: RootComponent,
@@ -41,19 +37,35 @@ function RootComponent() {
   );
 }
 
-// Applies saved theme and locale before paint to avoid flashes.
-const initScript = `(function(){try{
-  var t=localStorage.getItem('theme');
-  if(t==='dark')document.documentElement.classList.add('dark');
-  var l=localStorage.getItem('locale');
-  if(l==='ar'){document.documentElement.lang='ar';document.documentElement.dir='rtl';}
-}catch(e){}})();`;
-
+/**
+ * In SPA mode (entry-client.tsx), the HTML shell comes from index.html,
+ * so we must NOT render <html>/<head>/<body> again — just the content.
+ * In SSR mode (TanStack Start), we render the full document.
+ */
 function RootDocument({ children }: { children: ReactNode }) {
+  const isSPA =
+    typeof document !== "undefined" &&
+    document.getElementById("root") !== null;
+
+  if (isSPA) {
+    // SPA mode — index.html provides the HTML shell
+    return <>{children}</>;
+  }
+
+  // SSR mode — render full HTML document
   return (
     <html lang="fr" dir="ltr">
       <head>
-        <script dangerouslySetInnerHTML={{ __html: initScript }} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{
+              var t=localStorage.getItem('theme');
+              if(t==='dark')document.documentElement.classList.add('dark');
+              var l=localStorage.getItem('locale');
+              if(l==='ar'){document.documentElement.lang='ar';document.documentElement.dir='rtl';}
+            }catch(e){}})();`,
+          }}
+        />
         <HeadContent />
       </head>
       <body>
