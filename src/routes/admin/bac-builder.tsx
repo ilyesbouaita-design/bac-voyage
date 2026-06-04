@@ -286,7 +286,8 @@ function BacBuilderPage() {
       if (meta.duration_minutes && meta.duration_minutes > 0) examInsert.duration_minutes = meta.duration_minutes;
       if (userId && userId !== "demo-user-001") examInsert.created_by = userId;
 
-      console.log("Inserting exam:", examInsert);
+      console.log("Inserting exam:", JSON.stringify(examInsert, null, 2));
+      console.log("User ID:", userId);
       const { data: exam, error: examErr } = await supabase
         .from("exams")
         .insert(examInsert)
@@ -294,10 +295,14 @@ function BacBuilderPage() {
         .single();
 
       if (examErr || !exam) {
-        console.error("Exam insert error:", examErr);
-        throw examErr || new Error("Failed to create exam");
+        const errMsg = examErr?.message || examErr?.code || JSON.stringify(examErr);
+        console.error("Exam insert error:", JSON.stringify(examErr, null, 2));
+        toast.error(`Erreur Supabase: ${errMsg}`);
+        setSaving(false);
+        return;
       }
       console.log("Exam created:", exam.id);
+      toast.success("Examen créé ! Ajout des sections...");
 
       // 2. Create Textverständnis section
       const { data: tvSec } = await supabase
