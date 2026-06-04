@@ -79,7 +79,7 @@ export function AdminTextPassageEditor({
             <span className="text-[10px] font-semibold text-muted-foreground" style={tmr}>
               Deutsch
             </span>
-            <span className="text-[10px] font-semibold text-muted-foreground" style={tmr}>
+            <span className="text-[10px] font-semibold text-muted-foreground text-right" style={{ ...tmr, direction: "rtl", textAlign: "right" }}>
               العربية
             </span>
             <span className="text-[10px] font-semibold text-muted-foreground" style={tmr}>

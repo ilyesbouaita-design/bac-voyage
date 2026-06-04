@@ -198,6 +198,9 @@ function BacBuilderPage() {
     accepted_titles: [""],
   });
 
+  // Q3 type choice: "kombinieren" or "ergaenzen"
+  const [q3Type, setQ3Type] = useState<"kombinieren" | "ergaenzen" | null>(null);
+
   // Sprachfähigkeit — Wortschatz
   const [synonym, setSynonym] = useState<SynonymContent>({
     bac_type: "synonym", sentence: "", target_word: "", accepted_answers: [""],
@@ -315,27 +318,28 @@ function BacBuilderPage() {
           });
         }
 
-        // Kombinieren
-        await supabase.from("exam_questions").insert({
-          section_id: tvSec.id,
-          type: "matching",
-          content: kombinieren,
-          prompt_fr: "Was passt zusammen?",
-          points: 2,
-          grade_method: "auto",
-          order_index: fragen.length + 1,
-        });
-
-        // Ergänzen
-        await supabase.from("exam_questions").insert({
-          section_id: tvSec.id,
-          type: "fill_blank",
-          content: ergaenzen,
-          prompt_fr: "Ergänzen Sie!",
-          points: 2,
-          grade_method: "auto",
-          order_index: fragen.length + 2,
-        });
+        // Q3 — only save the selected type
+        if (q3Type === "kombinieren") {
+          await supabase.from("exam_questions").insert({
+            section_id: tvSec.id,
+            type: "matching",
+            content: kombinieren,
+            prompt_fr: "Was passt zusammen?",
+            points: 2,
+            grade_method: "auto",
+            order_index: fragen.length + 1,
+          });
+        } else if (q3Type === "ergaenzen") {
+          await supabase.from("exam_questions").insert({
+            section_id: tvSec.id,
+            type: "fill_blank",
+            content: ergaenzen,
+            prompt_fr: "Ergänzen Sie mit den passenden Wörtern!",
+            points: 2,
+            grade_method: "auto",
+            order_index: fragen.length + 1,
+          });
+        }
 
         // Titel
         await supabase.from("exam_questions").insert({
@@ -345,7 +349,7 @@ function BacBuilderPage() {
           prompt_fr: "Geben Sie dem Text einen Titel!",
           points: 1,
           grade_method: "ai",
-          order_index: fragen.length + 3,
+          order_index: fragen.length + 2,
         });
       }
 
@@ -375,16 +379,16 @@ function BacBuilderPage() {
           prompt_fr: "Gegenteil", points: 1, grade_method: "auto", order_index: idx++,
         });
         await supabase.from("exam_questions").insert({
-          section_id: sfSec.id, type: "short_text", content: uebersetzung,
-          prompt_fr: "Übersetzung", points: 1.5, grade_method: "ai", order_index: idx++,
-        });
-        await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "fill_blank", content: wortbildung,
           prompt_fr: "Wortbildung", points: 0.5, grade_method: "auto", order_index: idx++,
         });
         await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "fill_blank", content: wortableitung,
           prompt_fr: "Wortableitung", points: 0.5, grade_method: "auto", order_index: idx++,
+        });
+        await supabase.from("exam_questions").insert({
+          section_id: sfSec.id, type: "short_text", content: uebersetzung,
+          prompt_fr: "Übersetzung", points: 1.5, grade_method: "ai", order_index: idx++,
         });
 
         // Grammatik 1-3
@@ -668,8 +672,56 @@ function BacBuilderPage() {
           <div className="space-y-4">
             <AdminRichtigFalschEditor value={richtigFalsch} onChange={setRichtigFalsch} />
             <AdminFragenEditor questions={fragen} onChange={setFragen} />
-            <AdminKombinierenEditor value={kombinieren} onChange={setKombinieren} />
-            <AdminErgaenzenEditor value={ergaenzen} onChange={setErgaenzen} />
+
+            {/* Q3 — Choice: Kombinieren OR Ergänzen */}
+            {q3Type === null ? (
+              <div className="rounded-2xl border border-dashed border-border bg-card p-5">
+                <p className="text-[11px] text-muted-foreground mb-3 font-semibold" style={tmr}>
+                  Q3 — Choisissez le type d'exercice :
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setQ3Type("kombinieren")}
+                    className="rounded-xl border-2 border-[#6C4CE0]/30 hover:border-[#6C4CE0] bg-[#6C4CE0]/5 hover:bg-[#6C4CE0]/10 p-4 text-left transition-all"
+                    style={tmr}
+                  >
+                    <div className="font-bold text-[12px] text-[#6C4CE0] mb-1">Kombinieren Sie!</div>
+                    <div className="text-[11px] text-muted-foreground">Faire correspondre des éléments (gauche ↔ droite)</div>
+                  </button>
+                  <button
+                    onClick={() => setQ3Type("ergaenzen")}
+                    className="rounded-xl border-2 border-[#0FB6A3]/30 hover:border-[#0FB6A3] bg-[#0FB6A3]/5 hover:bg-[#0FB6A3]/10 p-4 text-left transition-all"
+                    style={tmr}
+                  >
+                    <div className="font-bold text-[12px] text-[#0FB6A3] mb-1">Ergänzen Sie mit den passenden Wörtern!</div>
+                    <div className="text-[11px] text-muted-foreground">Compléter des phrases avec des mots</div>
+                  </button>
+                </div>
+              </div>
+            ) : q3Type === "kombinieren" ? (
+              <div>
+                <AdminKombinierenEditor value={kombinieren} onChange={setKombinieren} />
+                <button
+                  onClick={() => setQ3Type(null)}
+                  className="mt-2 text-[11px] text-muted-foreground hover:text-[#6C4CE0] underline transition-colors"
+                  style={tmr}
+                >
+                  Changer le type
+                </button>
+              </div>
+            ) : (
+              <div>
+                <AdminErgaenzenEditor value={ergaenzen} onChange={setErgaenzen} />
+                <button
+                  onClick={() => setQ3Type(null)}
+                  className="mt-2 text-[11px] text-muted-foreground hover:text-[#6C4CE0] underline transition-colors"
+                  style={tmr}
+                >
+                  Changer le type
+                </button>
+              </div>
+            )}
+
             <AdminTitelEditor value={titel} onChange={setTitel} />
           </div>
         </div>
@@ -686,13 +738,27 @@ function BacBuilderPage() {
             <h3 className="font-bold text-[12px] text-muted-foreground mt-3" style={tmr}>Wortschatz</h3>
             <AdminSynonymGegenteilEditor type="synonym" value={synonym} onChange={setSynonym as any} />
             <AdminSynonymGegenteilEditor type="gegenteil" value={gegenteil} onChange={setGegenteil as any} />
-            <AdminUebersetzungEditor value={uebersetzung} onChange={setUebersetzung} />
             <AdminWortbildungEditor value={wortbildung} onChange={setWortbildung} />
+            <AdminUebersetzungEditor value={uebersetzung} onChange={setUebersetzung} />
 
             <h3 className="font-bold text-[12px] text-muted-foreground mt-4" style={tmr}>Grammatik</h3>
             <AdminGrammatikEditor value={gramm1} onChange={setGramm1} grammarType="tempus_1" />
             <AdminGrammatikEditor value={gramm2} onChange={setGramm2} grammarType="tempus_2" />
-            <AdminGrammatikEditor value={gramm3} onChange={setGramm3} grammarType="aktiv_passiv" />
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-[11px] font-semibold text-muted-foreground" style={tmr}>Gramm. 3 — Direction :</span>
+                <select
+                  className="rounded-lg border border-border bg-secondary/40 px-2 py-1 text-[11px] outline-none focus:border-[#6C4CE0]"
+                  style={tmr}
+                  value={gramm3.direction}
+                  onChange={(e) => setGramm3((g) => ({ ...g, direction: e.target.value as "aktiv" | "passiv" }))}
+                >
+                  <option value="passiv">Setzen Sie ins Passiv!</option>
+                  <option value="aktiv">Bilden Sie Aktiv!</option>
+                </select>
+              </div>
+              <AdminGrammatikEditor value={gramm3} onChange={setGramm3} grammarType="aktiv_passiv" />
+            </div>
             <AdminGrammatikEditor value={gramm4} onChange={setGramm4} grammarType="choice_4" />
             <AdminGrammatikEditor value={gramm5} onChange={setGramm5} grammarType="choice_5" />
             <AdminGrammatikEditor value={gramm6} onChange={setGramm6} grammarType="choice_6" />
