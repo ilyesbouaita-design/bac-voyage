@@ -37,7 +37,7 @@ const FONT_STYLE: React.CSSProperties = {
   fontSize: "12px",
 };
 
-export default function RichtigFalschCard({
+export function RichtigFalschCard({
   statements,
   onAnswersChange,
   showResults = false,
@@ -324,3 +324,5 @@ export default function RichtigFalschCard({
     </div>
   );
 }
+
+export default RichtigFalschCard;

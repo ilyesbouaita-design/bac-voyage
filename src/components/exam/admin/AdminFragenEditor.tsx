@@ -26,7 +26,7 @@ const newEntry = (): QuestionEntry => ({
   points: 2,
 });
 
-export default function AdminFragenEditor({ questions, onChange }: AdminFragenEditorProps) {
+export function AdminFragenEditor({ questions, onChange }: AdminFragenEditorProps) {
   const [entries, setEntries] = useState<QuestionEntry[]>(
     questions.length > 0 ? questions : [newEntry()]
   );
@@ -165,3 +165,5 @@ export default function AdminFragenEditor({ questions, onChange }: AdminFragenEd
     </div>
   );
 }
+
+export default AdminFragenEditor;

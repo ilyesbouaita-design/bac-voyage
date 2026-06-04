@@ -18,7 +18,7 @@ const FONT_STYLE: React.CSSProperties = {
   fontSize: "12px",
 };
 
-export default function TitelCard({
+export function TitelCard({
   accepted_titles,
   onAnswerChange,
   showResults = false,
@@ -142,3 +142,5 @@ export default function TitelCard({
     </div>
   );
 }
+
+export default TitelCard;

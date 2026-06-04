@@ -10,7 +10,7 @@ interface AdminTitelEditorProps {
 
 const FONT = { fontFamily: "'Times New Roman', Georgia, serif", fontSize: "12px" } as const;
 
-export default function AdminTitelEditor({ value, onChange }: AdminTitelEditorProps) {
+export function AdminTitelEditor({ value, onChange }: AdminTitelEditorProps) {
   const [titles, setTitles] = useState<string[]>(
     value.accepted_titles.length > 0 ? value.accepted_titles : [""]
   );
@@ -113,3 +113,5 @@ export default function AdminTitelEditor({ value, onChange }: AdminTitelEditorPr
     </div>
   );
 }
+
+export default AdminTitelEditor;
