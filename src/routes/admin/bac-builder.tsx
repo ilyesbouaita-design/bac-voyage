@@ -804,8 +804,8 @@ function BacBuilderPage() {
           </div>
         </div>
 
-        {/* Bottom bar */}
-        <div className="rounded-2xl border border-border bg-card shadow-sm p-4 flex items-center justify-between">
+        {/* Bottom bar — sticky */}
+        <div className="sticky bottom-0 z-30 rounded-2xl border border-border bg-card shadow-lg p-4 flex items-center justify-between">
           <span className="text-muted-foreground" style={{ fontSize: "11px", ...tmr }}>
             Total des points : <strong className="text-foreground">{totalPoints} pts</strong>
           </span>
@@ -818,12 +818,12 @@ function BacBuilderPage() {
               Annuler
             </button>
             <button
-              onClick={handleSave}
+              onClick={() => { console.log("Save clicked!"); handleSave(); }}
               disabled={saving}
-              className="px-6 py-2 rounded-xl text-[11px] font-bold text-white shadow-md transition hover:opacity-90 disabled:opacity-50"
+              className="px-8 py-3 rounded-xl text-[12px] font-bold text-white shadow-lg transition hover:opacity-90 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
               style={{ background: "linear-gradient(90deg, #6C4CE0, #FF5A5F)", ...tmr }}
             >
-              {saving ? "Enregistrement..." : "Enregistrer l'examen"}
+              {saving ? "⏳ Enregistrement..." : "💾 Enregistrer l'examen"}
             </button>
           </div>
         </div>
