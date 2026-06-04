@@ -256,6 +256,14 @@ function BacBuilderPage() {
       toast.error("Le titre est requis.");
       return;
     }
+
+    // Demo mode — can't save to Supabase
+    const isDemo = typeof localStorage !== "undefined" && localStorage.getItem("demo-mode") === "true";
+    if (isDemo) {
+      toast.success("Mode démo — Aperçu de la sauvegarde réussi ! Connectez-vous avec un vrai compte pour sauvegarder.");
+      return;
+    }
+
     setSaving(true);
     try {
       // 1. Create exam
@@ -419,9 +427,10 @@ function BacBuilderPage() {
 
       toast.success("Examen enregistré avec succès !");
       navigate({ to: "/admin/exams" });
-    } catch (err) {
-      toast.error("Erreur lors de l'enregistrement.");
-      console.error(err);
+    } catch (err: any) {
+      const msg = err?.message || err?.details || "Erreur inconnue";
+      toast.error(`Erreur: ${msg}`);
+      console.error("Save failed:", err);
     } finally {
       setSaving(false);
     }
