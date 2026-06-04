@@ -111,11 +111,7 @@ function getNavItems(t: any) {
 /* ---------- Types for exam state ---------- */
 interface ExamMetadata {
   title_fr: string;
-  title_ar: string;
-  description_fr: string;
-  description_ar: string;
   einheit: string;
-  cefr_level: string;
   duration_minutes: number;
 }
 
@@ -141,11 +137,7 @@ function BacBuilderPage() {
   // Exam metadata
   const [meta, setMeta] = useState<ExamMetadata>({
     title_fr: "",
-    title_ar: "",
-    description_fr: "",
-    description_ar: "",
     einheit: "einheit-01",
-    cefr_level: "",
     duration_minutes: 90,
   });
 
@@ -275,15 +267,11 @@ function BacBuilderPage() {
       // 1. Create exam — only include fields that have values
       const examInsert: Record<string, any> = {
         title_fr: meta.title_fr.trim(),
+        slug: meta.einheit || null,
+        duration_minutes: meta.duration_minutes > 0 ? meta.duration_minutes : 90,
         is_published: false,
         total_points: Math.round(totalPoints) || 0,
       };
-      if (meta.title_ar?.trim()) examInsert.title_ar = meta.title_ar.trim();
-      if (meta.description_fr?.trim()) examInsert.description_fr = meta.description_fr.trim();
-      if (meta.description_ar?.trim()) examInsert.description_ar = meta.description_ar.trim();
-      if (meta.einheit) examInsert.slug = meta.einheit;
-      if (meta.cefr_level && ["A1","A2","B1","B2"].includes(meta.cefr_level)) examInsert.cefr_level = meta.cefr_level;
-      if (meta.duration_minutes && meta.duration_minutes > 0) examInsert.duration_minutes = meta.duration_minutes;
       if (userId && userId !== "demo-user-001") examInsert.created_by = userId;
 
       console.log("Inserting exam:", JSON.stringify(examInsert, null, 2));
@@ -642,43 +630,27 @@ function BacBuilderPage() {
           </div>
         </div>
 
-        {/* Exam metadata */}
+        {/* Exam metadata — simplified: name, einheit, duration only */}
         <div className="rounded-2xl border border-border bg-card shadow-sm p-5 mb-5">
-          <h3 className="font-bold mb-4" style={{ fontSize: "13px", ...tmr }}>Informations g&eacute;n&eacute;rales</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <h3 className="font-bold mb-4" style={{ fontSize: "13px", ...tmr }}>Informations de l'examen</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Titre (FR)</label>
-              <input className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none transition focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15" style={tmr} value={meta.title_fr} onChange={(e) => setMeta((m) => ({ ...m, title_fr: e.target.value }))} placeholder="Titre en fran&ccedil;ais..." />
+              <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Nom de l'examen</label>
+              <input className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none transition focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15" style={tmr} value={meta.title_fr} onChange={(e) => setMeta((m) => ({ ...m, title_fr: e.target.value }))} placeholder="Ex: Bac Blanc — Session Juin 2026" />
             </div>
             <div>
-              <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Titre (AR)</label>
-              <input className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none transition focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15" style={{ ...tmr, direction: "rtl" }} dir="rtl" value={meta.title_ar} onChange={(e) => setMeta((m) => ({ ...m, title_ar: e.target.value }))} placeholder="...العنوان بالعربية" />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-            <div>
-              <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Einheit (Unit&eacute; th&eacute;matique)</label>
+              <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Einheit</label>
               <select className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none transition focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15" style={tmr} value={meta.einheit} onChange={(e) => setMeta((m) => ({ ...m, einheit: e.target.value }))}>
                 {EINHEITEN.map((e) => (
                   <option key={e.id} value={e.id}>
-                    {e.icon} Einheit {e.number}: {e.title_de} &mdash; {e.title_fr}
+                    {e.icon} Einheit {e.number}: {e.title_de}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Dur&eacute;e (minutes)</label>
-              <input type="number" className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none transition focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15" style={tmr} value={meta.duration_minutes} onChange={(e) => setMeta((m) => ({ ...m, duration_minutes: parseInt(e.target.value) || 0 }))} />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-            <div>
-              <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Niveau CECR <span className="font-normal text-muted-foreground">(optionnel)</span></label>
-              <select className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none" style={tmr} value={meta.cefr_level} onChange={(e) => setMeta((m) => ({ ...m, cefr_level: e.target.value }))}>
-                <option value="">— non sp&eacute;cifi&eacute; —</option>
-                <option value="A1">A1</option><option value="A2">A2</option>
-                <option value="B1">B1</option><option value="B2">B2</option>
-              </select>
+              <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Dur&eacute;e (min)</label>
+              <input type="number" className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none transition focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15" style={tmr} value={meta.duration_minutes} onChange={(e) => setMeta((m) => ({ ...m, duration_minutes: parseInt(e.target.value) || 90 }))} />
             </div>
           </div>
         </div>
