@@ -742,22 +742,52 @@ function BacBuilderPage() {
             <AdminUebersetzungEditor value={uebersetzung} onChange={setUebersetzung} />
 
             <h3 className="font-bold text-[12px] text-muted-foreground mt-4" style={tmr}>Grammatik</h3>
-            <AdminGrammatikEditor value={gramm1} onChange={setGramm1} grammarType="tempus_1" />
-            <AdminGrammatikEditor value={gramm2} onChange={setGramm2} grammarType="tempus_2" />
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-[11px] font-semibold text-muted-foreground" style={tmr}>Gramm. 3 — Direction :</span>
-                <select
-                  className="rounded-lg border border-border bg-secondary/40 px-2 py-1 text-[11px] outline-none focus:border-[#6C4CE0]"
-                  style={tmr}
-                  value={gramm3.direction}
-                  onChange={(e) => setGramm3((g) => ({ ...g, direction: e.target.value as "aktiv" | "passiv" }))}
-                >
+
+            {/* Q1 — Tempus (simple: dropdown + sentence + answer) */}
+            <div className="rounded-2xl border border-border bg-card p-4 mt-3" style={{ borderLeft: "4px solid #6C4CE0" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[11px] font-bold text-[#6C4CE0]" style={tmr}>Q1</span>
+                <span className="text-[11px]" style={tmr}>Setzen Sie ins</span>
+                <select className="rounded-lg border border-border bg-secondary/40 px-2 py-1 text-[11px] font-bold outline-none focus:border-[#6C4CE0]" style={tmr} value={gramm1.tense} onChange={(e) => setGramm1((g) => ({ ...g, tense: e.target.value }))}>
+                  <option value="Präteritum">Präteritum</option>
+                  <option value="Präsens">Präsens</option>
+                  <option value="Perfekt">Perfekt</option>
+                  <option value="Futur">Futur</option>
+                </select>
+                <span className="text-[11px]" style={tmr}>!</span>
+              </div>
+              <input className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none mb-2 focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15" style={tmr} placeholder="Satz (Original)..." value={gramm1.original_sentence} onChange={(e) => setGramm1((g) => ({ ...g, original_sentence: e.target.value }))} />
+              <input className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15" style={tmr} placeholder="Korrekte Antwort..." value={gramm1.correct_answer} onChange={(e) => setGramm1((g) => ({ ...g, correct_answer: e.target.value }))} />
+            </div>
+
+            {/* Q2 — Tempus (same simple layout) */}
+            <div className="rounded-2xl border border-border bg-card p-4 mt-3" style={{ borderLeft: "4px solid #0FB6A3" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[11px] font-bold text-[#0FB6A3]" style={tmr}>Q2</span>
+                <span className="text-[11px]" style={tmr}>Setzen Sie ins</span>
+                <select className="rounded-lg border border-border bg-secondary/40 px-2 py-1 text-[11px] font-bold outline-none focus:border-[#0FB6A3]" style={tmr} value={gramm2.tense} onChange={(e) => setGramm2((g) => ({ ...g, tense: e.target.value }))}>
+                  <option value="Präsens">Präsens</option>
+                  <option value="Präteritum">Präteritum</option>
+                  <option value="Perfekt">Perfekt</option>
+                  <option value="Futur">Futur</option>
+                </select>
+                <span className="text-[11px]" style={tmr}>!</span>
+              </div>
+              <input className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none mb-2 focus:border-[#0FB6A3] focus:ring-4 focus:ring-[#0FB6A3]/15" style={tmr} placeholder="Satz (Original)..." value={gramm2.original_sentence} onChange={(e) => setGramm2((g) => ({ ...g, original_sentence: e.target.value }))} />
+              <input className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none focus:border-[#0FB6A3] focus:ring-4 focus:ring-[#0FB6A3]/15" style={tmr} placeholder="Korrekte Antwort..." value={gramm2.correct_answer} onChange={(e) => setGramm2((g) => ({ ...g, correct_answer: e.target.value }))} />
+            </div>
+
+            {/* Q3 — Passiv/Aktiv (simple: dropdown + sentence + answer) */}
+            <div className="rounded-2xl border border-border bg-card p-4 mt-3" style={{ borderLeft: "4px solid #FFB200" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[11px] font-bold text-[#FFB200]" style={tmr}>Q3</span>
+                <select className="rounded-lg border border-border bg-secondary/40 px-2 py-1 text-[11px] font-bold outline-none focus:border-[#FFB200]" style={tmr} value={gramm3.direction} onChange={(e) => setGramm3((g) => ({ ...g, direction: e.target.value as "aktiv" | "passiv" }))}>
                   <option value="passiv">Setzen Sie ins Passiv!</option>
-                  <option value="aktiv">Bilden Sie Aktiv!</option>
+                  <option value="aktiv">Setzen Sie ins Aktiv!</option>
                 </select>
               </div>
-              <AdminGrammatikEditor value={gramm3} onChange={setGramm3} grammarType="aktiv_passiv" />
+              <input className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none mb-2 focus:border-[#FFB200] focus:ring-4 focus:ring-[#FFB200]/15" style={tmr} placeholder="Satz (Original)..." value={gramm3.original_sentence} onChange={(e) => setGramm3((g) => ({ ...g, original_sentence: e.target.value }))} />
+              <input className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none focus:border-[#FFB200] focus:ring-4 focus:ring-[#FFB200]/15" style={tmr} placeholder="Korrekte Antwort..." value={gramm3.correct_answer} onChange={(e) => setGramm3((g) => ({ ...g, correct_answer: e.target.value }))} />
             </div>
             <AdminGrammatikEditor value={gramm4} onChange={setGramm4} grammarType="choice_4" />
             <AdminGrammatikEditor value={gramm5} onChange={setGramm5} grammarType="choice_5" />
