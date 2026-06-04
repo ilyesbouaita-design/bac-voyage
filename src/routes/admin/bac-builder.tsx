@@ -58,6 +58,10 @@ import { GrammatikCard } from "@/components/exam/student/GrammatikCard";
 
 export const Route = createFileRoute("/admin/bac-builder")({
   component: BacBuilderPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    einheit: (search.einheit as string) || "einheit-01",
+    examId: (search.examId as string) || undefined,
+  }),
 });
 
 const tmr: React.CSSProperties = {
@@ -129,15 +133,16 @@ function BacBuilderPage() {
   const { locale } = useLocale();
   const t = dashboardTranslations[locale as keyof typeof dashboardTranslations] ?? dashboardTranslations.fr;
   const navigate = useNavigate();
+  const { einheit: einheitParam, examId } = Route.useSearch();
 
   // Mode: edit or preview
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [saving, setSaving] = useState(false);
 
-  // Exam metadata
+  // Exam metadata — einheit initialised from URL param
   const [meta, setMeta] = useState<ExamMetadata>({
     title_fr: "",
-    einheit: "einheit-01",
+    einheit: einheitParam || "einheit-01",
     duration_minutes: 90,
   });
 
@@ -589,9 +594,22 @@ function BacBuilderPage() {
         {/* Top bar with mode toggle */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="font-bold" style={{ fontSize: "14px", ...tmr }}>
-              Cr&eacute;er un examen Bac
-            </h1>
+            <div className="flex items-center gap-2 mb-0.5">
+              <h1 className="font-bold" style={{ fontSize: "14px", ...tmr }}>
+                Cr&eacute;er un examen Bac
+              </h1>
+              {(() => {
+                const e = EINHEITEN.find((u) => u.id === meta.einheit);
+                return e ? (
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: e.color + "18", color: e.color, ...tmr }}
+                  >
+                    {e.icon} Einheit {e.number}: {e.title_de}
+                  </span>
+                ) : null;
+              })()}
+            </div>
             <p className="text-muted-foreground mt-0.5" style={{ fontSize: "11px" }}>
               Remplissez toutes les sections puis enregistrez.
             </p>
@@ -630,23 +648,13 @@ function BacBuilderPage() {
           </div>
         </div>
 
-        {/* Exam metadata — simplified: name, einheit, duration only */}
+        {/* Exam metadata — name + duration (einheit comes from URL, shown as badge) */}
         <div className="rounded-2xl border border-border bg-card shadow-sm p-5 mb-5">
           <h3 className="font-bold mb-4" style={{ fontSize: "13px", ...tmr }}>Informations de l'examen</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Nom de l'examen</label>
               <input className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none transition focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15" style={tmr} value={meta.title_fr} onChange={(e) => setMeta((m) => ({ ...m, title_fr: e.target.value }))} placeholder="Ex: Bac Blanc — Session Juin 2026" />
-            </div>
-            <div>
-              <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Einheit</label>
-              <select className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none transition focus:border-[#6C4CE0] focus:ring-4 focus:ring-[#6C4CE0]/15" style={tmr} value={meta.einheit} onChange={(e) => setMeta((m) => ({ ...m, einheit: e.target.value }))}>
-                {EINHEITEN.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.icon} Einheit {e.number}: {e.title_de}
-                  </option>
-                ))}
-              </select>
             </div>
             <div>
               <label className="block mb-1 text-[12px] font-semibold text-foreground/80" style={tmr}>Dur&eacute;e (min)</label>
