@@ -276,7 +276,7 @@ function BacBuilderPage() {
       const examInsert: Record<string, any> = {
         title_fr: meta.title_fr.trim(),
         is_published: false,
-        total_points: totalPoints || 0,
+        total_points: Math.round(totalPoints) || 0,
       };
       if (meta.title_ar?.trim()) examInsert.title_ar = meta.title_ar.trim();
       if (meta.description_fr?.trim()) examInsert.description_fr = meta.description_fr.trim();
