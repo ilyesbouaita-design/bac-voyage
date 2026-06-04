@@ -62,7 +62,7 @@ const navItems = (t: ReturnType<typeof getT>) => [
   },
   {
     label: t.sidebar_grammar,
-    to: "/admin/grammar",
+    to: "/admin/grammatik-units",
     icon: (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -84,7 +84,7 @@ const navItems = (t: ReturnType<typeof getT>) => [
   },
   {
     label: t.sidebar_vocabulary,
-    to: "/admin/vocabulary",
+    to: "/admin/wortschatz-units",
     icon: (
       <svg
         xmlns="http://www.w3.org/2000/svg"

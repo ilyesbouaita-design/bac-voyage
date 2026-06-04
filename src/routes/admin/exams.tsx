@@ -63,7 +63,7 @@ const navItems = (t: ReturnType<typeof getT>) => [
   },
   {
     label: t.sidebar_grammar,
-    to: "/admin/grammar",
+    to: "/admin/grammatik-units",
     icon: (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -85,7 +85,7 @@ const navItems = (t: ReturnType<typeof getT>) => [
   },
   {
     label: t.sidebar_vocabulary,
-    to: "/admin/vocabulary",
+    to: "/admin/wortschatz-units",
     icon: (
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -206,7 +206,7 @@ function AdminExams() {
               {t.admin_exams_subtitle ?? "Manage and publish your exams."}
             </p>
           </div>
-          <Link to="/admin/exam-new" className="inline-flex items-center gap-2 bg-brand-violet text-white px-5 py-2.5 rounded-xl font-medium text-sm hover:bg-brand-violet/90 transition-colors">
+          <Link to="/admin/bac-builder" className="inline-flex items-center gap-2 bg-brand-violet text-white px-5 py-2.5 rounded-xl font-medium text-sm hover:bg-brand-violet/90 transition-colors">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="16"
@@ -381,22 +381,40 @@ function AdminExams() {
                   </span>
                 </div>
 
-                {/* Toggle button */}
-                <div className="pt-1 border-t border-gray-100">
+                {/* Action buttons */}
+                <div className="pt-2 border-t border-gray-100 flex gap-2">
+                  <Link
+                    to="/admin/bac-builder"
+                    search={{ examId: exam.id }}
+                    className="flex-1 py-2 rounded-xl text-sm font-medium text-center bg-brand-violet/10 text-brand-violet hover:bg-brand-violet/20 transition-colors"
+                  >
+                    ✏️ Modifier
+                  </Link>
                   <button
                     onClick={() => togglePublish(exam)}
                     disabled={toggling === exam.id}
-                    className={`w-full py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
                       exam.is_published
-                        ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        : "bg-brand-violet/10 text-brand-violet hover:bg-brand-violet/20"
+                        ? "bg-green-50 text-green-700 hover:bg-green-100"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                     }`}
                   >
                     {toggling === exam.id
                       ? "…"
                       : exam.is_published
-                        ? (t.admin_exams_unpublish ?? "Unpublish")
-                        : (t.admin_exams_publish ?? "Publish")}
+                        ? "✓ Publié"
+                        : "Publier"}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!confirm("Supprimer cet examen ?")) return;
+                      await supabase.from("exams").delete().eq("id", exam.id);
+                      setExams((prev) => prev.filter((e) => e.id !== exam.id));
+                    }}
+                    className="py-2 px-3 rounded-xl text-sm text-red-500 hover:bg-red-50 transition-colors"
+                    title="Supprimer"
+                  >
+                    🗑
                   </button>
                 </div>
               </div>
