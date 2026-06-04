@@ -272,18 +272,24 @@ function BacBuilderPage() {
 
     setSaving(true);
     try {
-      // 1. Create exam
+      // 1. Create exam — only include fields that have values
+      const examInsert: Record<string, any> = {
+        title_fr: meta.title_fr.trim(),
+        is_published: false,
+        total_points: totalPoints || 0,
+      };
+      if (meta.title_ar?.trim()) examInsert.title_ar = meta.title_ar.trim();
+      if (meta.description_fr?.trim()) examInsert.description_fr = meta.description_fr.trim();
+      if (meta.description_ar?.trim()) examInsert.description_ar = meta.description_ar.trim();
+      if (meta.einheit) examInsert.slug = meta.einheit;
+      if (meta.cefr_level && ["A1","A2","B1","B2"].includes(meta.cefr_level)) examInsert.cefr_level = meta.cefr_level;
+      if (meta.duration_minutes && meta.duration_minutes > 0) examInsert.duration_minutes = meta.duration_minutes;
+      if (userId && userId !== "demo-user-001") examInsert.created_by = userId;
+
+      console.log("Inserting exam:", examInsert);
       const { data: exam, error: examErr } = await supabase
         .from("exams")
-        .insert({
-          title_fr: meta.title_fr,
-          title_ar: meta.title_ar || null,
-          description_fr: meta.description_fr || null,
-          description_ar: meta.description_ar || null,
-          slug: meta.einheit || null,
-          cefr_level: meta.cefr_level || null,
-          duration_minutes: meta.duration_minutes || null,
-          total_points: totalPoints,
+        .insert(examInsert)
           created_by: userId,
           is_published: false,
         })
