@@ -759,18 +759,45 @@ function BacBuilderPage() {
                   <h2 className="font-bold" style={{ fontSize: "14px", ...tmr }}>II. Sprachf&auml;higkeit</h2>
                 </div>
                 <div className="space-y-4">
-                  <SynonymGegenteilCard type="synonym" sentence={synonym.sentence} target_word={synonym.target_word} accepted_answers={synonym.accepted_answers} points={1} onAnswerChange={() => {}} />
-                  <SynonymGegenteilCard type="gegenteil" sentence={gegenteil.sentence} target_word={gegenteil.target_word} gap_sentence={gegenteil.gap_sentence} accepted_answers={gegenteil.accepted_answers} points={1} onAnswerChange={() => {}} />
-                  <UebersetzungCard german_sentence={uebersetzung.german_sentence} accepted_translations={uebersetzung.accepted_translations} points={1.5} onAnswerChange={() => {}} />
+                  {/* Wortschatz */}
+                  <SynonymGegenteilCard type="synonym" sentence={synonym.sentence} target_word={synonym.target_word} accepted_answers={synonym.accepted_answers} points={0.5} onAnswerChange={() => {}} />
+                  <SynonymGegenteilCard type="gegenteil" sentence={gegenteil.sentence} target_word={gegenteil.target_word} gap_sentence={gegenteil.gap_sentence} accepted_answers={gegenteil.accepted_answers} points={0.5} onAnswerChange={() => {}} />
+                  {wortbildung && <WortbildungCard variant="kompositum_bilden" word1={wortbildung.word1 || ""} word2={wortbildung.word2 || ""} result={wortbildung.result || ""} points={0.5} onAnswerChange={() => {}} showResults={false} />}
+                  {wortableitung && <WortbildungCard variant="wortableitung" source_type={wortableitung.source_type} target_type={wortableitung.target_type} word={wortableitung.word || ""} hint={wortableitung.hint} accepted_answers={wortableitung.accepted_answers || []} points={0.5} onAnswerChange={() => {}} showResults={false} />}
+                  <UebersetzungCard german_sentence={uebersetzung.german_sentence} accepted_translations={uebersetzung.accepted_translations} points={1} onAnswerChange={() => {}} />
+
+                  {/* Grammatik Q1-Q3 */}
                   {gramm1.original_sentence && (
-                    <GrammatikCard variant="tempus" tense={gramm1.tense} original_sentence={gramm1.original_sentence} correct_answer={gramm1.correct_answer} points={1} onAnswerChange={() => {}} />
+                    <GrammatikCard variant="tempus" tense={gramm1.tense} original_sentence={gramm1.original_sentence} correct_answer={gramm1.correct_answer} points={0.5} onAnswerChange={() => {}} />
                   )}
                   {gramm2.original_sentence && (
-                    <GrammatikCard variant="tempus" tense={gramm2.tense} original_sentence={gramm2.original_sentence} correct_answer={gramm2.correct_answer} points={1} onAnswerChange={() => {}} />
+                    <GrammatikCard variant="tempus" tense={gramm2.tense} original_sentence={gramm2.original_sentence} correct_answer={gramm2.correct_answer} points={0.5} onAnswerChange={() => {}} />
                   )}
                   {gramm3.original_sentence && (
                     <GrammatikCard variant="aktiv_passiv" direction={gramm3.direction} original_sentence={gramm3.original_sentence} correct_answer={gramm3.correct_answer} points={1} onAnswerChange={() => {}} />
                   )}
+
+                  {/* Grammatik Q4-Q6 (from choice pool) */}
+                  {[gramm4, gramm5, gramm6].map((g, i) => {
+                    if (!g || !g.bac_type) return null;
+                    const bt = g.bac_type;
+                    if (bt === "grammatik_satzbau") {
+                      return <GrammatikCard key={`gx${i}`} variant="satzbau" clause_type={g.clause_type} original_sentence={g.sentence1} sentence2={g.sentence2} correct_answer={g.correct_answer} points={1} onAnswerChange={() => {}} />;
+                    }
+                    if (bt === "grammatik_modalverb") {
+                      return <GrammatikCard key={`gx${i}`} variant="modalverb" underlined_words={g.underlined_words} original_sentence={g.sentence} correct_answer={g.correct_answer} points={1} onAnswerChange={() => {}} />;
+                    }
+                    if (bt === "grammatik_konnektoren") {
+                      return <GrammatikCard key={`gx${i}`} variant="konnektoren" konnektor_sentences={g.sentences} original_sentence="" correct_answer="" points={1} onAnswerChange={() => {}} />;
+                    }
+                    if (bt === "grammatik_deklination") {
+                      return <GrammatikCard key={`gx${i}`} variant="deklination" template={g.template} original_sentence="" correct_answer="" points={1} onAnswerChange={() => {}} />;
+                    }
+                    if (bt === "grammatik_fragen_stellen") {
+                      return <GrammatikCard key={`gx${i}`} variant="fragen_stellen" underlined_words={g.underlined_words} original_sentence={g.sentence} correct_answer={g.correct_question} points={1} onAnswerChange={() => {}} />;
+                    }
+                    return null;
+                  })}
                 </div>
               </div>
             </div>
