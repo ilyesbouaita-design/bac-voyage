@@ -18,7 +18,7 @@ interface DashboardLayoutProps {
   onLocaleChange?: (locale: Locale) => void;
   role: "admin" | "student";
   displayName?: string | null;
-  navItems: NavItem[];
+  navItems?: NavItem[];
 }
 
 export function DashboardLayout({
@@ -40,6 +40,7 @@ export function DashboardLayout({
   const t = tProp ?? dashboardTranslations[locale] ?? dashboardTranslations["fr"];
   const onLocaleChange = onLocaleChangeProp ?? localeHook.setLocale;
   const displayName = displayNameProp ?? null;
+  const safeNavItems = navItems ?? [];
 
   function toggleTheme() {
     const el = document.documentElement;
@@ -92,7 +93,7 @@ export function DashboardLayout({
 
         {/* Nav items */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-          {navItems.map((item) => {
+          {safeNavItems.map((item) => {
             const isActive = matchRoute({ to: item.to, fuzzy: true });
             return (
               <Link
