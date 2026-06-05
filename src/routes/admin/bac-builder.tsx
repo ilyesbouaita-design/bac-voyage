@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { EINHEITEN } from "@/lib/einheiten";
@@ -248,6 +248,134 @@ function BacBuilderPage() {
     0.5 + 0.5 + 1 + // gramm 1 (Tempus 0.5) + gramm 2 (Tempus 0.5) + gramm 3 (Passiv/Aktiv 1)
     (gramm4 ? 1 : 0) + (gramm5 ? 1 : 0) + (gramm6 ? 1 : 0);
 
+  // Load existing exam for editing
+  useEffect(() => {
+    if (!examId || authLoading) return;
+
+    let gramm1Loaded = false;
+    let gramm4Set = false;
+    let gramm5Set = false;
+
+    async function loadExam() {
+      // Load exam metadata
+      const { data: examData } = await supabase
+        .from("exams")
+        .select("*")
+        .eq("id", examId)
+        .single();
+
+      if (!examData) {
+        toast.error("Examen introuvable");
+        return;
+      }
+
+      setMeta({
+        title_fr: examData.title_fr || "",
+        einheit: examData.slug || einheitParam || "einheit-01",
+        duration_minutes: examData.duration_minutes || 90,
+      });
+
+      // Load sections
+      const { data: sections } = await supabase
+        .from("exam_sections")
+        .select("*")
+        .eq("exam_id", examId)
+        .order("order_index");
+
+      if (!sections || sections.length === 0) return;
+
+      // Load questions for each section
+      for (const sec of sections) {
+        const { data: questions } = await supabase
+          .from("exam_questions")
+          .select("*")
+          .eq("section_id", sec.id)
+          .order("order_index");
+
+        if (!questions) continue;
+
+        // Set passage from the section that has it
+        if (sec.passage_de) setPassage(sec.passage_de);
+
+        const loadedFragen: Array<{ id: string; content: FragenZumTextContent; points: number }> = [];
+
+        // Parse questions and populate state
+        for (const q of questions) {
+          const content = q.content as any;
+          if (!content) continue;
+
+          switch (content.bac_type) {
+            case "richtig_falsch_zitat":
+              setRichtigFalsch(content);
+              break;
+            case "fragen_zum_text": {
+              loadedFragen.push({ id: q.id, content, points: q.points });
+              break;
+            }
+            case "kombinieren":
+              setQ3Type("kombinieren");
+              setKombinieren(content);
+              break;
+            case "ergaenzen":
+              setQ3Type("ergaenzen");
+              setErgaenzen(content);
+              break;
+            case "titel":
+              setTitel(content);
+              break;
+            case "synonym":
+              setSynonym(content);
+              break;
+            case "gegenteil":
+              setGegenteil(content);
+              break;
+            case "uebersetzung":
+              setUebersetzung(content);
+              break;
+            case "kompositum_bilden":
+            case "kompositum_loesen":
+              setWortbildung(content);
+              break;
+            case "wortableitung":
+              setWortableitung(content);
+              break;
+            case "grammatik_tempus": {
+              if (!gramm1Loaded) {
+                setGramm1(content);
+                gramm1Loaded = true;
+              } else {
+                setGramm2(content);
+              }
+              break;
+            }
+            case "grammatik_aktiv_passiv":
+              setGramm3(content);
+              break;
+            default:
+              if (content.bac_type?.startsWith("grammatik_")) {
+                if (!gramm4Set) { setGramm4(content); gramm4Set = true; }
+                else if (!gramm5Set) { setGramm5(content); gramm5Set = true; }
+                else { setGramm6(content); }
+              }
+              break;
+          }
+        }
+
+        if (loadedFragen.length > 0) {
+          setFragen(loadedFragen.map((f) => ({
+            id: f.id,
+            content: f.content,
+            points: f.points,
+          })));
+        }
+      }
+
+      toast.success("Examen chargé pour modification");
+    }
+
+    loadExam();
+  }, [examId, authLoading]);
+
   // Save exam
   async function handleSave() {
     if (!meta.title_fr.trim()) {
@@ -270,39 +398,78 @@ function BacBuilderPage() {
 
     setSaving(true);
     try {
-      // 1. Create exam — only include fields that have values
-      const examInsert: Record<string, any> = {
-        title_fr: meta.title_fr.trim(),
-        slug: meta.einheit || null,
-        duration_minutes: meta.duration_minutes > 0 ? meta.duration_minutes : 90,
-        is_published: false,
-        total_points: Math.round(totalPoints) || 0,
-      };
-      if (userId && userId !== "demo-user-001") examInsert.created_by = userId;
+      // Determine the exam ID to use for sections/questions
+      let activeExamId: string;
 
-      console.log("Inserting exam:", JSON.stringify(examInsert, null, 2));
-      console.log("User ID:", userId);
-      const { data: exam, error: examErr } = await supabase
-        .from("exams")
-        .insert(examInsert)
-        .select()
-        .single();
+      if (examId) {
+        // UPDATE mode — update existing exam row
+        const { error: updateErr } = await supabase
+          .from("exams")
+          .update({
+            title_fr: meta.title_fr.trim(),
+            slug: meta.einheit || null,
+            duration_minutes: meta.duration_minutes > 0 ? meta.duration_minutes : 90,
+            total_points: Math.round(totalPoints) || 0,
+          })
+          .eq("id", examId);
 
-      if (examErr || !exam) {
-        const errMsg = examErr?.message || examErr?.code || JSON.stringify(examErr);
-        console.error("Exam insert error:", JSON.stringify(examErr, null, 2));
-        toast.error(`Erreur Supabase: ${errMsg}`);
-        setSaving(false);
-        return;
+        if (updateErr) {
+          toast.error("Erreur mise à jour: " + updateErr.message);
+          setSaving(false);
+          return;
+        }
+
+        // Delete old sections and questions, then re-create
+        const { data: oldSections } = await supabase
+          .from("exam_sections")
+          .select("id")
+          .eq("exam_id", examId);
+
+        if (oldSections) {
+          for (const sec of oldSections) {
+            await supabase.from("exam_questions").delete().eq("section_id", sec.id);
+          }
+          await supabase.from("exam_sections").delete().eq("exam_id", examId);
+        }
+
+        activeExamId = examId;
+        toast.success("Examen mis à jour ! Reconstruction des sections...");
+      } else {
+        // CREATE mode — insert new exam row
+        const examInsert: Record<string, any> = {
+          title_fr: meta.title_fr.trim(),
+          slug: meta.einheit || null,
+          duration_minutes: meta.duration_minutes > 0 ? meta.duration_minutes : 90,
+          is_published: false,
+          total_points: Math.round(totalPoints) || 0,
+        };
+        if (userId && userId !== "demo-user-001") examInsert.created_by = userId;
+
+        console.log("Inserting exam:", JSON.stringify(examInsert, null, 2));
+        console.log("User ID:", userId);
+        const { data: exam, error: examErr } = await supabase
+          .from("exams")
+          .insert(examInsert)
+          .select()
+          .single();
+
+        if (examErr || !exam) {
+          const errMsg = examErr?.message || examErr?.code || JSON.stringify(examErr);
+          console.error("Exam insert error:", JSON.stringify(examErr, null, 2));
+          toast.error(`Erreur Supabase: ${errMsg}`);
+          setSaving(false);
+          return;
+        }
+        console.log("Exam created:", exam.id);
+        activeExamId = exam.id;
+        toast.success("Examen créé ! Ajout des sections...");
       }
-      console.log("Exam created:", exam.id);
-      toast.success("Examen créé ! Ajout des sections...");
 
       // 2. Create Textverständnis section
-      const { data: tvSec } = await supabase
+      const { data: tvSec, error: tvErr } = await supabase
         .from("exam_sections")
         .insert({
-          exam_id: exam.id,
+          exam_id: activeExamId,
           title_fr: "Textverständnis",
           title_ar: "فهم النص",
           kind: "textverstaendnis",
@@ -313,9 +480,14 @@ function BacBuilderPage() {
         .select()
         .single();
 
+      if (tvErr) {
+        console.error("Failed to create TV section:", tvErr.message);
+        toast.error("Erreur section Textverständnis: " + tvErr.message);
+      }
+
       if (tvSec) {
         // R/F question
-        await supabase.from("exam_questions").insert({
+        const { error: rfErr } = await supabase.from("exam_questions").insert({
           section_id: tvSec.id,
           type: "true_false",
           content: richtigFalsch,
@@ -324,10 +496,11 @@ function BacBuilderPage() {
           grade_method: "ai",
           order_index: 0,
         });
+        if (rfErr) console.error("Failed to insert richtig/falsch question:", rfErr.message);
 
         // Fragen
         for (let i = 0; i < fragen.length; i++) {
-          await supabase.from("exam_questions").insert({
+          const { error: fqErr } = await supabase.from("exam_questions").insert({
             section_id: tvSec.id,
             type: "short_text",
             content: fragen[i].content,
@@ -336,11 +509,12 @@ function BacBuilderPage() {
             grade_method: "ai",
             order_index: i + 1,
           });
+          if (fqErr) console.error(`Failed to insert frage ${i + 1}:`, fqErr.message);
         }
 
         // Q3 — only save the selected type
         if (q3Type === "kombinieren") {
-          await supabase.from("exam_questions").insert({
+          const { error: kombErr } = await supabase.from("exam_questions").insert({
             section_id: tvSec.id,
             type: "matching",
             content: kombinieren,
@@ -349,8 +523,9 @@ function BacBuilderPage() {
             grade_method: "auto",
             order_index: fragen.length + 1,
           });
+          if (kombErr) console.error("Failed to insert kombinieren question:", kombErr.message);
         } else if (q3Type === "ergaenzen") {
-          await supabase.from("exam_questions").insert({
+          const { error: ergErr } = await supabase.from("exam_questions").insert({
             section_id: tvSec.id,
             type: "fill_blank",
             content: ergaenzen,
@@ -359,10 +534,11 @@ function BacBuilderPage() {
             grade_method: "auto",
             order_index: fragen.length + 1,
           });
+          if (ergErr) console.error("Failed to insert ergaenzen question:", ergErr.message);
         }
 
         // Titel
-        await supabase.from("exam_questions").insert({
+        const { error: titelErr } = await supabase.from("exam_questions").insert({
           section_id: tvSec.id,
           type: "short_text",
           content: titel,
@@ -371,13 +547,14 @@ function BacBuilderPage() {
           grade_method: "ai",
           order_index: fragen.length + 2,
         });
+        if (titelErr) console.error("Failed to insert titel question:", titelErr.message);
       }
 
       // 3. Create Sprachfähigkeit section
-      const { data: sfSec } = await supabase
+      const { data: sfSec, error: sfErr } = await supabase
         .from("exam_sections")
         .insert({
-          exam_id: exam.id,
+          exam_id: activeExamId,
           title_fr: "Sprachfähigkeit",
           title_ar: "الكفاءة اللغوية",
           kind: "sprachfaehigkeit",
@@ -387,52 +564,74 @@ function BacBuilderPage() {
         .select()
         .single();
 
+      if (sfErr) {
+        console.error("Failed to create SF section:", sfErr.message);
+        toast.error("Erreur section Sprachfähigkeit: " + sfErr.message);
+      }
+
       if (sfSec) {
         let idx = 0;
         // Wortschatz
-        await supabase.from("exam_questions").insert({
+        const { error: synErr } = await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "fill_blank", content: synonym,
           prompt_fr: "Synonym", points: 0.5, grade_method: "auto", order_index: idx++,
         });
-        await supabase.from("exam_questions").insert({
+        if (synErr) console.error("Failed to insert synonym question:", synErr.message);
+
+        const { error: gegErr } = await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "fill_blank", content: gegenteil,
           prompt_fr: "Gegenteil", points: 0.5, grade_method: "auto", order_index: idx++,
         });
-        await supabase.from("exam_questions").insert({
+        if (gegErr) console.error("Failed to insert gegenteil question:", gegErr.message);
+
+        const { error: wbErr } = await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "fill_blank", content: wortbildung,
           prompt_fr: "Wortbildung", points: 0.5, grade_method: "auto", order_index: idx++,
         });
-        await supabase.from("exam_questions").insert({
+        if (wbErr) console.error("Failed to insert wortbildung question:", wbErr.message);
+
+        const { error: waErr } = await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "fill_blank", content: wortableitung,
           prompt_fr: "Wortableitung", points: 0.5, grade_method: "auto", order_index: idx++,
         });
-        await supabase.from("exam_questions").insert({
+        if (waErr) console.error("Failed to insert wortableitung question:", waErr.message);
+
+        const { error: uebErr } = await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "short_text", content: uebersetzung,
           prompt_fr: "Übersetzung", points: 1, grade_method: "ai", order_index: idx++,
         });
+        if (uebErr) console.error("Failed to insert uebersetzung question:", uebErr.message);
 
         // Grammatik 1-3
-        await supabase.from("exam_questions").insert({
+        const { error: g1Err } = await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "short_text", content: gramm1,
           prompt_fr: `Setzen Sie ins ${gramm1.tense}!`, points: 0.5, grade_method: "auto", order_index: idx++,
         });
-        await supabase.from("exam_questions").insert({
+        if (g1Err) console.error("Failed to insert gramm1 question:", g1Err.message);
+
+        const { error: g2Err } = await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "short_text", content: gramm2,
           prompt_fr: `Setzen Sie ins ${gramm2.tense}!`, points: 0.5, grade_method: "auto", order_index: idx++,
         });
-        await supabase.from("exam_questions").insert({
+        if (g2Err) console.error("Failed to insert gramm2 question:", g2Err.message);
+
+        const { error: g3Err } = await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "short_text", content: gramm3,
           prompt_fr: gramm3.direction === "aktiv" ? "Bilden Sie Aktiv!" : "Setzen Sie ins Passiv!",
           points: 1, grade_method: "auto", order_index: idx++,
         });
+        if (g3Err) console.error("Failed to insert gramm3 question:", g3Err.message);
 
         // Grammatik 4-6 (if set)
-        for (const g of [gramm4, gramm5, gramm6]) {
+        const grammExtra = [gramm4, gramm5, gramm6];
+        for (let gi = 0; gi < grammExtra.length; gi++) {
+          const g = grammExtra[gi];
           if (g) {
-            await supabase.from("exam_questions").insert({
+            const { error: gxErr } = await supabase.from("exam_questions").insert({
               section_id: sfSec.id, type: "short_text", content: g,
               prompt_fr: "Grammatik", points: 1, grade_method: "auto", order_index: idx++,
             });
+            if (gxErr) console.error(`Failed to insert gramm${gi + 4} question:`, gxErr.message);
           }
         }
       }
