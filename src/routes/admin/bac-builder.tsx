@@ -996,11 +996,28 @@ function BacBuilderPage() {
               <input className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none mb-2 focus:border-[#FFB200] focus:ring-4 focus:ring-[#FFB200]/15" style={tmr} placeholder="Satz (Original)..." value={gramm3.original_sentence} onChange={(e) => setGramm3((g) => ({ ...g, original_sentence: e.target.value }))} />
               <input className="w-full rounded-xl border border-border bg-secondary/40 px-3 py-2 text-[12px] outline-none focus:border-[#FFB200] focus:ring-4 focus:ring-[#FFB200]/15" style={tmr} placeholder="Korrekte Antwort..." value={gramm3.correct_answer} onChange={(e) => setGramm3((g) => ({ ...g, correct_answer: e.target.value }))} />
             </div>
-            <AdminGrammatikEditor value={gramm4} onChange={setGramm4} grammarType="choice_4" />
-            <AdminGrammatikEditor value={gramm5} onChange={setGramm5} grammarType="choice_5" />
-            <AdminGrammatikEditor value={gramm6} onChange={setGramm6} grammarType="choice_6" />
+            {/* Q4 — Choice from pool */}
+            <div className="mt-4">
+              <p className="text-[11px] font-bold mb-2" style={{ color: "#FF5A5F", ...tmr }}>Q4 — Choisissez le type (1 pt) :</p>
+              <AdminGrammatikEditor value={gramm4} onChange={setGramm4} grammarType="choice_4" />
+            </div>
+
+            {/* Q5 — Choice from pool */}
+            <div className="mt-4">
+              <p className="text-[11px] font-bold mb-2" style={{ color: "#0FB6A3", ...tmr }}>Q5 — Choisissez le type (1 pt) :</p>
+              <AdminGrammatikEditor value={gramm5} onChange={setGramm5} grammarType="choice_5" />
+            </div>
+
+            {/* Q6 — Choice from pool */}
+            <div className="mt-4 mb-8">
+              <p className="text-[11px] font-bold mb-2" style={{ color: "#8B5CF6", ...tmr }}>Q6 — Choisissez le type (1 pt) :</p>
+              <AdminGrammatikEditor value={gramm6} onChange={setGramm6} grammarType="choice_6" />
+            </div>
           </div>
         </div>
+
+        {/* Spacer so bottom bar doesn't cover Q6 */}
+        <div className="h-20" />
 
         {/* Bottom bar — sticky */}
         <div className="sticky bottom-0 z-30 rounded-2xl border border-border bg-card shadow-lg p-4 flex items-center justify-between">
