@@ -84,6 +84,50 @@ function StudentExamPage() {
   const [textCollapsed, setTextCollapsed] = useState(false);
   const [textMode, setTextMode] = useState<"docked" | "floating">("docked");
 
+  // Split divider state
+  const [splitPercent, setSplitPercent] = useState(50);
+  const [dragging, setDragging] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setDragging(true);
+  }, []);
+
+  useEffect(() => {
+    if (!dragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const percent = ((e.clientX - rect.left) / rect.width) * 100;
+      setSplitPercent(Math.min(80, Math.max(20, percent)));
+    };
+
+    const handleMouseUp = () => setDragging(false);
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const percent = ((e.touches[0].clientX - rect.left) / rect.width) * 100;
+      setSplitPercent(Math.min(80, Math.max(20, percent)));
+    };
+    const handleTouchEnd = () => setDragging(false);
+
+    window.addEventListener("touchmove", handleTouchMove);
+    window.addEventListener("touchend", handleTouchEnd);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [dragging]);
+
   // Section nav
   const [activeSection, setActiveSection] = useState("");
   const rightPanelRef = useRef<HTMLDivElement>(null);
@@ -595,13 +639,16 @@ function StudentExamPage() {
         </header>
 
         {/* Main split view */}
-        <div className="flex flex-1 min-h-0">
+        <div
+          ref={containerRef}
+          className="flex flex-1 min-h-0"
+          style={{ userSelect: dragging ? "none" : undefined }}
+        >
           {/* Text panel */}
           {textMode === "docked" && (
             <div
-              className={`border-e border-border transition-all duration-300 ${
-                textCollapsed ? "w-[48px]" : "w-1/2"
-              } shrink-0`}
+              className={`border-e border-border transition-all duration-300 shrink-0`}
+              style={{ width: textCollapsed ? "48px" : splitPercent + "%" }}
             >
               <ExamTextPanel
                 passage={passage}
@@ -614,6 +661,30 @@ function StudentExamPage() {
                   setTextCollapsed(false);
                 }}
               />
+            </div>
+          )}
+
+          {/* Draggable divider */}
+          {textMode === "docked" && !textCollapsed && (
+            <div
+              onMouseDown={handleDividerMouseDown}
+              onTouchStart={(e) => { e.preventDefault(); setDragging(true); }}
+              style={{
+                width: "6px",
+                cursor: "col-resize",
+                background: dragging ? "#6C4CE0" : "transparent",
+                borderLeft: "1px solid var(--border)",
+                borderRight: "1px solid var(--border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                transition: dragging ? "none" : "background 0.2s",
+                userSelect: "none",
+              }}
+              className="hover:bg-[#6C4CE0]/10"
+            >
+              <div style={{ width: "2px", height: "32px", borderRadius: "1px", background: dragging ? "#fff" : "#6C4CE0", opacity: dragging ? 1 : 0.3 }} />
             </div>
           )}
 
@@ -632,8 +703,14 @@ function StudentExamPage() {
           {/* Questions panel */}
           <div
             ref={rightPanelRef}
-            className="flex-1 overflow-y-auto"
-            style={{ overscrollBehavior: "contain" }}
+            className="overflow-y-auto"
+            style={{
+              overscrollBehavior: "contain",
+              width: textMode === "docked" && !textCollapsed
+                ? (100 - splitPercent) + "%"
+                : undefined,
+              flex: textMode !== "docked" || textCollapsed ? 1 : undefined,
+            }}
           >
             {/* Section nav */}
             {navSections.length > 0 && (

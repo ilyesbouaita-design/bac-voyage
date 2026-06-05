@@ -40,9 +40,11 @@ const BASE_FONT: React.CSSProperties = {
 function TextContent({
   passage,
   vocab,
+  fontSize,
 }: {
   passage: string;
   vocab: VocabEntry[];
+  fontSize?: number;
 }) {
   return (
     <div
@@ -58,6 +60,7 @@ function TextContent({
       <p
         style={{
           ...BASE_FONT,
+          fontSize: fontSize ? fontSize + "px" : BASE_FONT.fontSize,
           lineHeight: "1.75",
           whiteSpace: "pre-wrap",
           margin: 0,
@@ -137,10 +140,14 @@ function DockedHeader({
   collapsed,
   onToggleCollapse,
   onToggleMode,
+  fontSize,
+  setFontSize,
 }: {
   collapsed: boolean;
   onToggleCollapse: () => void;
   onToggleMode: () => void;
+  fontSize: number;
+  setFontSize: React.Dispatch<React.SetStateAction<number>>;
 }) {
   return (
     <div
@@ -183,6 +190,48 @@ function DockedHeader({
 
       {/* Right: action buttons */}
       <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+        {/* Zoom out button */}
+        <button
+          onClick={() => setFontSize((s) => Math.max(10, s - 1))}
+          title="Réduire la taille du texte"
+          disabled={fontSize <= 10}
+          style={{
+            ...BASE_FONT,
+            border: "1px solid #c4b8e8",
+            borderRadius: "4px",
+            background: "#fff",
+            cursor: fontSize <= 10 ? "not-allowed" : "pointer",
+            padding: "0 6px",
+            color: fontSize <= 10 ? "#c4b8e8" : "#6c4fc5",
+            height: "24px",
+            lineHeight: 1,
+            opacity: fontSize <= 10 ? 0.5 : 1,
+          }}
+        >
+          A-
+        </button>
+
+        {/* Zoom in button */}
+        <button
+          onClick={() => setFontSize((s) => Math.min(22, s + 1))}
+          title="Augmenter la taille du texte"
+          disabled={fontSize >= 22}
+          style={{
+            ...BASE_FONT,
+            border: "1px solid #c4b8e8",
+            borderRadius: "4px",
+            background: "#fff",
+            cursor: fontSize >= 22 ? "not-allowed" : "pointer",
+            padding: "0 6px",
+            color: fontSize >= 22 ? "#c4b8e8" : "#6c4fc5",
+            height: "24px",
+            lineHeight: 1,
+            opacity: fontSize >= 22 ? 0.5 : 1,
+          }}
+        >
+          A+
+        </button>
+
         {/* Float button */}
         <button
           onClick={onToggleMode}
@@ -239,6 +288,8 @@ function DockedPanel({
   onToggleCollapse: () => void;
   onToggleMode: () => void;
 }) {
+  const [fontSize, setFontSize] = useState(12);
+
   return (
     <div
       style={{
@@ -294,8 +345,10 @@ function DockedPanel({
             collapsed={collapsed}
             onToggleCollapse={onToggleCollapse}
             onToggleMode={onToggleMode}
+            fontSize={fontSize}
+            setFontSize={setFontSize}
           />
-          <TextContent passage={passage} vocab={vocab} />
+          <TextContent passage={passage} vocab={vocab} fontSize={fontSize} />
         </>
       )}
     </div>
