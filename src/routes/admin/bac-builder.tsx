@@ -401,20 +401,7 @@ function BacBuilderPage() {
         }
       }
 
-      console.log("=== LOAD SUMMARY ===");
-      console.log("R/F statements:", richtigFalsch.statements?.length ?? 0);
-      console.log("Fragen:", loadedFragen.length);
-      console.log("Q3 type:", q3Type);
-      console.log("Synonym:", synonym.sentence ? "✓" : "empty");
-      console.log("Gegenteil:", gegenteil.sentence ? "✓" : "empty");
-      console.log("Wortbildung:", wortbildung.bac_type ? "✓" : "empty");
-      console.log("Übersetzung:", uebersetzung.german_sentence ? "✓" : "empty");
-      console.log("Gramm1:", gramm1.original_sentence ? "✓" : "empty");
-      console.log("Gramm2:", gramm2.original_sentence ? "✓" : "empty");
-      console.log("Gramm3:", gramm3.original_sentence ? "✓" : "empty");
-      console.log("Gramm4:", gramm4 ? "✓" : "null");
-      console.log("Gramm5:", gramm5 ? "✓" : "null");
-      console.log("Gramm6:", gramm6 ? "✓" : "null");
+      console.log("=== LOAD COMPLETE ===");
       toast.success("Examen chargé pour modification");
     }
 
