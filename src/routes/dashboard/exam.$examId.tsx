@@ -713,16 +713,14 @@ function StudentExamPage() {
             />
           )}
 
-          {/* Questions panel */}
+          {/* Questions panel — always flex:1 to fill remaining space */}
           <div
             ref={rightPanelRef}
             className="overflow-y-auto"
             style={{
               overscrollBehavior: "contain",
-              width: textMode === "docked" && !textCollapsed
-                ? (100 - splitPercent) + "%"
-                : undefined,
-              flex: textMode !== "docked" || textCollapsed ? 1 : undefined,
+              flex: 1,
+              minWidth: 0,
             }}
           >
             {/* Section nav */}

@@ -802,13 +802,14 @@ function BacBuilderPage() {
             )}
 
             {/* Student questions preview */}
+            {/* Questions panel — always flex:1 to fill remaining space */}
             <div
               className="overflow-y-auto p-4 space-y-6"
               style={{
                 ...tmr,
                 overscrollBehavior: "contain",
-                width: previewTextMode === "docked" && !previewTextCollapsed ? (100 - previewSplit) + "%" : undefined,
-                flex: previewTextMode !== "docked" || previewTextCollapsed ? 1 : undefined,
+                flex: 1,
+                minWidth: 0,
               }}
             >
               {/* Textverständnis */}
