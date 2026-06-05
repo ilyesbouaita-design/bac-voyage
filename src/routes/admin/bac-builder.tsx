@@ -138,6 +138,7 @@ function BacBuilderPage() {
   // Mode: edit or preview
   const [mode, setMode] = useState<"edit" | "preview">("edit");
   const [saving, setSaving] = useState(false);
+  const [examLoaded, setExamLoaded] = useState(!examId); // true if new exam, false until loaded
 
   // Exam metadata — einheit initialised from URL param
   const [meta, setMeta] = useState<ExamMetadata>({
@@ -402,6 +403,7 @@ function BacBuilderPage() {
       }
 
       console.log("=== LOAD COMPLETE ===");
+      setExamLoaded(true);
       toast.success("Examen chargé pour modification");
     }
 
@@ -953,6 +955,17 @@ function BacBuilderPage() {
           </div>
         </div>
 
+        {/* Show spinner while loading existing exam */}
+        {!examLoaded && (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-10 h-10 border-4 border-[#6C4CE0] border-t-transparent rounded-full animate-spin" />
+            <span className="ml-3 text-muted-foreground" style={tmr}>Chargement de l'examen...</span>
+          </div>
+        )}
+
+        {/* Only render the form AFTER loading completes (so useState initializes with loaded data) */}
+        {examLoaded && <>
+
         {/* Exam metadata — name + duration (einheit comes from URL, shown as badge) */}
         <div className="rounded-2xl border border-border bg-card shadow-sm p-5 mb-5">
           <h3 className="font-bold mb-4" style={{ fontSize: "13px", ...tmr }}>Informations de l'examen</h3>
@@ -1123,6 +1136,9 @@ function BacBuilderPage() {
 
         {/* Spacer so bottom bar doesn't cover Q6 */}
         <div className="h-20" />
+
+        </>}
+        {/* End of examLoaded conditional */}
 
         {/* Bottom bar — sticky */}
         <div className="sticky bottom-0 z-30 rounded-2xl border border-border bg-card shadow-lg p-4 flex items-center justify-between">
