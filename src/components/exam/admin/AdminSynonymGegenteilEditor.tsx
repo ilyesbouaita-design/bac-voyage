@@ -43,15 +43,12 @@ export function AdminSynonymGegenteilEditor({
       };
       onChange(updated);
     } else {
-      const gapSentence = draftSentence.replace(
-        new RegExp(`\\b${escapeRegex(cleanWord)}\\b`, "i"),
-        "………"
-      );
+      // For Gegenteil: sentence already contains "………" — just record the clue word
       const updated: GegenteilContent = {
         bac_type: "gegenteil",
         sentence: draftSentence,
         target_word: cleanWord,
-        gap_sentence: gapSentence,
+        gap_sentence: draftSentence,
         accepted_answers: (value as GegenteilContent).accepted_answers ?? [],
       };
       onChange(updated);
@@ -64,7 +61,7 @@ export function AdminSynonymGegenteilEditor({
     if (type === "synonym") {
       onChange({ ...(value as SynonymContent), target_word: "", accepted_answers: [] });
     } else {
-      onChange({ ...(value as GegenteilContent), target_word: "", gap_sentence: "", accepted_answers: [] });
+      onChange({ ...(value as GegenteilContent), target_word: "", gap_sentence: draftSentence, accepted_answers: [] });
     }
   }
 
@@ -127,7 +124,11 @@ export function AdminSynonymGegenteilEditor({
                 setEditorState("input");
               }
             }}
-            placeholder="Saisir la phrase complète ici…"
+            placeholder={
+              type === "gegenteil"
+                ? "Tapez la phrase avec ……… pour le trou, ex: Während er Geld spart, wird Geld ………."
+                : "Saisir la phrase complète ici…"
+            }
             style={FONT}
             disabled={editorState === "selecting"}
           />
@@ -136,15 +137,22 @@ export function AdminSynonymGegenteilEditor({
 
       {/* STEP 2: Word selection mode trigger */}
       {editorState === "input" && (
-        <button
-          type="button"
-          disabled={!draftSentence.trim()}
-          onClick={() => setEditorState("selecting")}
-          className="rounded-xl px-4 py-2 text-[12px] font-medium text-white transition disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
-          style={{ backgroundColor: highlightColor, fontFamily: FONT.fontFamily, fontSize: "12px" }}
-        >
-          Sélectionner le mot ✏️
-        </button>
+        <div className="space-y-1">
+          {type === "gegenteil" && (
+            <p className="text-[11px] text-muted-foreground" style={{ ...FONT, fontSize: "11px" }}>
+              Tapez la phrase avec ……… pour le trou et sélectionnez le mot de référence (le mot dont l&apos;élève doit trouver le contraire).
+            </p>
+          )}
+          <button
+            type="button"
+            disabled={!draftSentence.trim()}
+            onClick={() => setEditorState("selecting")}
+            className="rounded-xl px-4 py-2 text-[12px] font-medium text-white transition disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
+            style={{ backgroundColor: highlightColor, fontFamily: FONT.fontFamily, fontSize: "12px" }}
+          >
+            Sélectionner le mot ✏️
+          </button>
+        </div>
       )}
 
       {/* STEP 2: Selecting mode — click a word */}
@@ -216,24 +224,7 @@ export function AdminSynonymGegenteilEditor({
             </div>
           </div>
 
-          {/* Gegenteil: gap sentence */}
-          {type === "gegenteil" && (
-            <div className="space-y-1">
-              <label className="block text-[12px] font-medium" style={FONT}>
-                Phrase à trous
-              </label>
-              <input
-                className={inputCls}
-                value={(value as GegenteilContent).gap_sentence ?? ""}
-                onChange={(e) => handleGapSentenceChange(e.target.value)}
-                style={FONT}
-                placeholder="Phrase avec ………"
-              />
-              <p className="text-[11px] text-muted-foreground" style={{ ...FONT, fontSize: "11px" }}>
-                Auto-générée — vous pouvez modifier.
-              </p>
-            </div>
-          )}
+          {/* Gegenteil: the sentence already contains "………" — no separate gap sentence field needed */}
 
           {/* Accepted answers */}
           <div className="space-y-2">

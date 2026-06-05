@@ -124,12 +124,7 @@ export function SynonymGegenteilCard({
         {after}
       </p>
 
-      {/* ── Gap sentence (Gegenteil only) ── */}
-      {!isSynonym && gap_sentence && (
-        <p className="text-[12px] leading-relaxed text-muted-foreground border-l-2 border-[#FF5A5F]/40 pl-3">
-          {gap_sentence}
-        </p>
-      )}
+      {/* ── Gap sentence (Gegenteil): the sentence itself contains "………" so no separate block needed ── */}
 
       {/* ── Answer input ── */}
       <div className="flex flex-col gap-1.5">
