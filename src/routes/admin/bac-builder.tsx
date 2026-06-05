@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { EINHEITEN } from "@/lib/einheiten";
@@ -233,6 +233,35 @@ function BacBuilderPage() {
   // Preview panel state
   const [previewTextCollapsed, setPreviewTextCollapsed] = useState(false);
   const [previewTextMode, setPreviewTextMode] = useState<"docked" | "floating">("docked");
+  const [previewSplit, setPreviewSplit] = useState(50);
+  const [previewDragging, setPreviewDragging] = useState(false);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+
+  // Preview divider drag handler
+  useEffect(() => {
+    if (!previewDragging) return;
+    const onMove = (e: MouseEvent) => {
+      if (!previewContainerRef.current) return;
+      const rect = previewContainerRef.current.getBoundingClientRect();
+      setPreviewSplit(Math.min(80, Math.max(20, ((e.clientX - rect.left) / rect.width) * 100)));
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!previewContainerRef.current) return;
+      const rect = previewContainerRef.current.getBoundingClientRect();
+      setPreviewSplit(Math.min(80, Math.max(20, ((e.touches[0].clientX - rect.left) / rect.width) * 100)));
+    };
+    const onUp = () => setPreviewDragging(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchmove", onTouchMove);
+    window.addEventListener("touchend", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onUp);
+    };
+  }, [previewDragging]);
 
   // Calculate total points
   const totalPoints =
@@ -711,9 +740,15 @@ function BacBuilderPage() {
           </header>
 
           {/* Split view */}
-          <div className="flex flex-1 min-h-0">
+          <div ref={previewContainerRef} className="flex flex-1 min-h-0" style={{ userSelect: previewDragging ? "none" : undefined }}>
             {previewTextMode === "docked" && (
-              <div className={`border-e border-border transition-all duration-300 ${previewTextCollapsed ? "w-[48px]" : "w-1/2"} shrink-0`}>
+              <div
+                className="border-e border-border shrink-0"
+                style={{
+                  width: previewTextCollapsed ? "48px" : previewSplit + "%",
+                  transition: previewDragging ? "none" : "width 0.3s ease",
+                }}
+              >
                 <ExamTextPanel
                   passage={passage}
                   vocab={vocab}
@@ -724,6 +759,37 @@ function BacBuilderPage() {
                 />
               </div>
             )}
+
+            {/* Draggable divider */}
+            {previewTextMode === "docked" && !previewTextCollapsed && (
+              <div
+                onMouseDown={(e) => { e.preventDefault(); setPreviewDragging(true); }}
+                onTouchStart={(e) => { e.preventDefault(); setPreviewDragging(true); }}
+                style={{
+                  width: previewDragging ? "8px" : "12px",
+                  minWidth: previewDragging ? "8px" : "12px",
+                  cursor: "col-resize",
+                  background: previewDragging ? "#6C4CE0" : "transparent",
+                  borderLeft: "1px solid var(--border)",
+                  borderRight: "1px solid var(--border)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  transition: previewDragging ? "none" : "all 0.2s",
+                  userSelect: "none",
+                  zIndex: 10,
+                }}
+                className="hover:bg-[#6C4CE0]/10"
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                  {[0,1,2,3,4].map((i) => (
+                    <div key={i} style={{ width: "3px", height: "3px", borderRadius: "50%", background: previewDragging ? "#fff" : "#6C4CE0", opacity: previewDragging ? 1 : 0.4 }} />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {previewTextMode === "floating" && (
               <ExamTextPanel
                 passage={passage}
@@ -736,7 +802,15 @@ function BacBuilderPage() {
             )}
 
             {/* Student questions preview */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-6" style={{ ...tmr, overscrollBehavior: "contain" }}>
+            <div
+              className="overflow-y-auto p-4 space-y-6"
+              style={{
+                ...tmr,
+                overscrollBehavior: "contain",
+                width: previewTextMode === "docked" && !previewTextCollapsed ? (100 - previewSplit) + "%" : undefined,
+                flex: previewTextMode !== "docked" || previewTextCollapsed ? 1 : undefined,
+              }}
+            >
               {/* Textverständnis */}
               <div>
                 <div className="mb-3 pb-2 border-b-2" style={{ borderColor: "#6C4CE0" }}>
