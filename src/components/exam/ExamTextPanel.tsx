@@ -293,19 +293,12 @@ function DockedPanel({
   return (
     <div
       style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        height: "100vh",
-        width: collapsed ? "36px" : "50%",
-        backgroundColor: "#ffffff",
-        borderRight: "2px solid #e2e0f0",
+        width: "100%",
+        height: "100%",
+        backgroundColor: "var(--card, #ffffff)",
         display: "flex",
         flexDirection: "column",
-        zIndex: 100,
-        transition: "width 0.3s ease",
         overflow: "hidden",
-        boxShadow: "2px 0 8px rgba(108,79,197,0.07)",
       }}
     >
       {collapsed ? (
