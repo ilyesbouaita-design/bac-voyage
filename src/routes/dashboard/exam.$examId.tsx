@@ -647,10 +647,10 @@ function StudentExamPage() {
           {/* Text panel */}
           {textMode === "docked" && (
             <div
-              className={`border-e border-border shrink-0`}
+              className="border-e border-border overflow-hidden"
               style={{
-                width: textCollapsed ? "48px" : splitPercent + "%",
-                transition: dragging ? "none" : "width 0.3s ease",
+                flex: textCollapsed ? "0 0 48px" : `0 0 ${splitPercent}%`,
+                transition: dragging ? "none" : "flex-basis 0.3s ease",
               }}
             >
               <ExamTextPanel

@@ -743,10 +743,10 @@ function BacBuilderPage() {
           <div ref={previewContainerRef} className="flex flex-1 min-h-0" style={{ userSelect: previewDragging ? "none" : undefined }}>
             {previewTextMode === "docked" && (
               <div
-                className="border-e border-border shrink-0"
+                className="border-e border-border overflow-hidden"
                 style={{
-                  width: previewTextCollapsed ? "48px" : previewSplit + "%",
-                  transition: previewDragging ? "none" : "width 0.3s ease",
+                  flex: previewTextCollapsed ? "0 0 48px" : `0 0 ${previewSplit}%`,
+                  transition: previewDragging ? "none" : "flex-basis 0.3s ease",
                 }}
               >
                 <ExamTextPanel
