@@ -647,8 +647,11 @@ function StudentExamPage() {
           {/* Text panel */}
           {textMode === "docked" && (
             <div
-              className={`border-e border-border transition-all duration-300 shrink-0`}
-              style={{ width: textCollapsed ? "48px" : splitPercent + "%" }}
+              className={`border-e border-border shrink-0`}
+              style={{
+                width: textCollapsed ? "48px" : splitPercent + "%",
+                transition: dragging ? "none" : "width 0.3s ease",
+              }}
             >
               <ExamTextPanel
                 passage={passage}
@@ -670,7 +673,8 @@ function StudentExamPage() {
               onMouseDown={handleDividerMouseDown}
               onTouchStart={(e) => { e.preventDefault(); setDragging(true); }}
               style={{
-                width: "6px",
+                width: dragging ? "8px" : "12px",
+                minWidth: dragging ? "8px" : "12px",
                 cursor: "col-resize",
                 background: dragging ? "#6C4CE0" : "transparent",
                 borderLeft: "1px solid var(--border)",
@@ -679,12 +683,21 @@ function StudentExamPage() {
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
-                transition: dragging ? "none" : "background 0.2s",
+                transition: dragging ? "none" : "all 0.2s",
                 userSelect: "none",
+                position: "relative",
+                zIndex: 10,
               }}
-              className="hover:bg-[#6C4CE0]/10"
+              className="hover:bg-[#6C4CE0]/10 group"
             >
-              <div style={{ width: "2px", height: "32px", borderRadius: "1px", background: dragging ? "#fff" : "#6C4CE0", opacity: dragging ? 1 : 0.3 }} />
+              {/* Grip dots */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "center" }}>
+                <div style={{ width: "3px", height: "3px", borderRadius: "50%", background: dragging ? "#fff" : "#6C4CE0", opacity: dragging ? 1 : 0.4 }} />
+                <div style={{ width: "3px", height: "3px", borderRadius: "50%", background: dragging ? "#fff" : "#6C4CE0", opacity: dragging ? 1 : 0.4 }} />
+                <div style={{ width: "3px", height: "3px", borderRadius: "50%", background: dragging ? "#fff" : "#6C4CE0", opacity: dragging ? 1 : 0.4 }} />
+                <div style={{ width: "3px", height: "3px", borderRadius: "50%", background: dragging ? "#fff" : "#6C4CE0", opacity: dragging ? 1 : 0.4 }} />
+                <div style={{ width: "3px", height: "3px", borderRadius: "50%", background: dragging ? "#fff" : "#6C4CE0", opacity: dragging ? 1 : 0.4 }} />
+              </div>
             </div>
           )}
 
