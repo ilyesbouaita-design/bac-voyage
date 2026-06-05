@@ -315,8 +315,8 @@ export function KombinierenCard({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "12px",
+            gridTemplateColumns: "1fr 100px 1fr",
+            gap: "0px",
           }}
         >
           {/* ── LEFT COLUMN ── */}
@@ -397,6 +397,9 @@ export function KombinierenCard({
               );
             })}
           </div>
+
+          {/* ── MIDDLE SPACER (arrows go here via SVG overlay) ── */}
+          <div />
 
           {/* ── RIGHT COLUMN ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
