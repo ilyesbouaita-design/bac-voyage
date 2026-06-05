@@ -1,162 +1,226 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
-// ---------------------------------------------------------------------------
-// LandscapeLock
-// Forces landscape orientation on mobile devices.
-// Wraps children; shows a rotation prompt when in portrait mode on small screens.
-// ---------------------------------------------------------------------------
+/**
+ * LandscapeLock — forces fullscreen + landscape on mobile.
+ *
+ * Flow:
+ * 1. On mobile portrait: shows a "Start fullscreen" button (required by browser — can't auto-fullscreen)
+ * 2. User taps the button → requests fullscreen → locks landscape orientation
+ * 3. Exam content is shown in fullscreen landscape
+ * 4. If user exits fullscreen → shows the button again
+ */
 
 interface LandscapeLockProps {
   children: React.ReactNode;
 }
 
-const BASE_FONT: React.CSSProperties = {
-  fontFamily: "Times New Roman, Times, serif",
+const FONT: React.CSSProperties = {
+  fontFamily: "'Times New Roman', Georgia, serif",
   fontSize: "12px",
 };
 
-function isPortraitMobile(): boolean {
+function isMobile(): boolean {
   if (typeof window === "undefined") return false;
-  const portrait = window.matchMedia("(orientation: portrait)").matches;
-  const mobile = window.innerWidth < 768;
-  return portrait && mobile;
+  return window.innerWidth < 768 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 }
 
 export function LandscapeLock({ children }: LandscapeLockProps) {
-  const [needsRotation, setNeedsRotation] = useState<boolean>(isPortraitMobile);
+  const [mobile] = useState(isMobile);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
+  // Track fullscreen state
   useEffect(() => {
-    // Attempt to lock orientation via Screen Orientation API
-    if (
-      typeof screen !== "undefined" &&
-      screen.orientation &&
-      typeof (screen.orientation as any).lock === "function"
-    ) {
-      (screen.orientation as any).lock("landscape").catch(() => {
-        // API may be rejected (e.g. not in fullscreen) — fall back to overlay
-      });
-    }
+    if (!mobile) return;
 
-    const mql = window.matchMedia("(orientation: portrait)");
+    const handleFsChange = () => {
+      const fs = !!document.fullscreenElement;
+      setIsFullscreen(fs);
 
-    const handleChange = () => {
-      setNeedsRotation(isPortraitMobile());
+      // If we entered fullscreen, try to lock landscape
+      if (fs) {
+        try {
+          const orientation = screen?.orientation;
+          if (orientation && typeof (orientation as any).lock === "function") {
+            (orientation as any).lock("landscape").catch(() => {});
+          }
+        } catch {}
+      }
     };
 
-    // Modern API
-    if (typeof mql.addEventListener === "function") {
-      mql.addEventListener("change", handleChange);
-    } else {
-      // Legacy
-      mql.addListener(handleChange);
-    }
-
-    // Also listen for resize (covers cases where matchMedia alone isn't enough)
-    window.addEventListener("resize", handleChange);
+    document.addEventListener("fullscreenchange", handleFsChange);
+    document.addEventListener("webkitfullscreenchange", handleFsChange);
 
     return () => {
-      if (typeof mql.removeEventListener === "function") {
-        mql.removeEventListener("change", handleChange);
-      } else {
-        mql.removeListener(handleChange);
-      }
-      window.removeEventListener("resize", handleChange);
+      document.removeEventListener("fullscreenchange", handleFsChange);
+      document.removeEventListener("webkitfullscreenchange", handleFsChange);
     };
+  }, [mobile]);
+
+  // Request fullscreen + landscape
+  const enterFullscreen = useCallback(async () => {
+    try {
+      const el = document.documentElement;
+      if (el.requestFullscreen) {
+        await el.requestFullscreen();
+      } else if ((el as any).webkitRequestFullscreen) {
+        await (el as any).webkitRequestFullscreen();
+      }
+      // Landscape lock happens in the fullscreenchange handler
+    } catch (err) {
+      console.warn("Fullscreen request failed:", err);
+      // If fullscreen fails, just dismiss and show content anyway
+      setDismissed(true);
+    }
   }, []);
 
-  // Inject portrait body overflow hidden via a <style> tag
-  useEffect(() => {
-    const styleId = "landscape-lock-style";
-    let el = document.getElementById(styleId) as HTMLStyleElement | null;
+  // Skip on mobile if already dismissed
+  const skipOverlay = useCallback(() => {
+    setDismissed(true);
+  }, []);
 
-    if (needsRotation) {
-      if (!el) {
-        el = document.createElement("style");
-        el.id = styleId;
-        document.head.appendChild(el);
-      }
-      el.textContent = `@media (max-width: 768px) { body { overflow: hidden !important; } }`;
-    } else {
-      if (el) {
-        el.remove();
-      }
-    }
-
-    return () => {
-      const existing = document.getElementById(styleId);
-      if (existing) existing.remove();
-    };
-  }, [needsRotation]);
-
-  if (!needsRotation) {
+  // Not mobile → just render children
+  if (!mobile) {
     return <>{children}</>;
   }
 
+  // Mobile + fullscreen → render children (we're in landscape fullscreen)
+  if (isFullscreen || dismissed) {
+    return <>{children}</>;
+  }
+
+  // Mobile + not fullscreen → show the fullscreen prompt
   return (
     <>
-      {/* Overlay */}
       <div
         style={{
           position: "fixed",
           inset: 0,
-          zIndex: 9999,
-          backgroundColor: "rgba(15, 10, 40, 0.93)",
+          zIndex: 99999,
+          background: "linear-gradient(135deg, #1a1035 0%, #2a1f4e 50%, #1a1035 100%)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: "20px",
-          padding: "24px",
+          gap: "24px",
+          padding: "32px",
         }}
       >
-        {/* Animated phone rotation icon */}
+        {/* Logo */}
         <div
           style={{
-            animation: "rotate-phone 1.8s ease-in-out infinite",
-            color: "#6c4fc5",
-            fontSize: "56px",
-            lineHeight: 1,
+            width: "56px",
+            height: "56px",
+            borderRadius: "18px",
+            background: "linear-gradient(135deg, #6C4CE0, #FF5A5F)",
+            color: "#fff",
+            fontSize: "24px",
+            fontWeight: "bold",
+            display: "grid",
+            placeItems: "center",
           }}
         >
-          &#128241;
+          B
         </div>
 
-        {/* French message */}
-        <p
+        {/* Title */}
+        <h1
           style={{
-            ...BASE_FONT,
+            ...FONT,
+            fontSize: "16px",
+            fontWeight: "bold",
             color: "#ffffff",
             textAlign: "center",
             margin: 0,
-            lineHeight: "1.7",
           }}
         >
-          Veuillez tourner votre appareil en mode paysage
-        </p>
+          BacAllemand
+        </h1>
 
-        {/* Arabic message */}
+        {/* Phone rotation animation */}
+        <div
+          style={{
+            fontSize: "48px",
+            lineHeight: 1,
+            animation: "rotate-phone 2s ease-in-out infinite",
+          }}
+        >
+          📱
+        </div>
+
+        {/* Instructions */}
         <p
           style={{
-            ...BASE_FONT,
-            color: "#c4b8e8",
+            ...FONT,
+            fontSize: "13px",
+            color: "#e0d8f0",
+            textAlign: "center",
+            margin: 0,
+            lineHeight: 1.7,
+            maxWidth: "280px",
+          }}
+        >
+          Pour une meilleure expérience d'examen, passez en mode plein écran paysage.
+        </p>
+        <p
+          style={{
+            ...FONT,
+            fontSize: "12px",
+            color: "#b0a8c8",
             textAlign: "center",
             direction: "rtl",
             margin: 0,
-            lineHeight: "1.7",
+            lineHeight: 1.7,
           }}
         >
-          يرجى تدوير جهازك إلى الوضع الأفقي
+          للحصول على تجربة أفضل، انتقل إلى وضع ملء الشاشة الأفقي.
         </p>
+
+        {/* Fullscreen button */}
+        <button
+          onClick={enterFullscreen}
+          style={{
+            ...FONT,
+            fontSize: "14px",
+            fontWeight: "bold",
+            color: "#ffffff",
+            background: "linear-gradient(90deg, #6C4CE0, #FF5A5F)",
+            border: "none",
+            borderRadius: "16px",
+            padding: "16px 40px",
+            cursor: "pointer",
+            boxShadow: "0 4px 20px rgba(108, 76, 224, 0.4)",
+            marginTop: "8px",
+          }}
+        >
+          🔲 Plein écran paysage
+        </button>
+
+        {/* Skip link */}
+        <button
+          onClick={skipOverlay}
+          style={{
+            ...FONT,
+            fontSize: "11px",
+            color: "#8078a0",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            textDecoration: "underline",
+            marginTop: "4px",
+          }}
+        >
+          Continuer sans plein écran
+        </button>
       </div>
 
-      {/* Keyframe animation injected inline */}
       <style>{`
         @keyframes rotate-phone {
-          0%   { transform: rotate(0deg);   }
-          30%  { transform: rotate(0deg);   }
-          60%  { transform: rotate(90deg);  }
-          90%  { transform: rotate(90deg);  }
-          100% { transform: rotate(0deg);   }
+          0%   { transform: rotate(0deg); }
+          25%  { transform: rotate(0deg); }
+          50%  { transform: rotate(90deg); }
+          75%  { transform: rotate(90deg); }
+          100% { transform: rotate(0deg); }
         }
       `}</style>
     </>
