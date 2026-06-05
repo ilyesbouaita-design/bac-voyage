@@ -564,7 +564,7 @@ export async function callAI(systemPrompt: string, userPrompt: string): Promise<
 
 // -- AI Prompt builders per grading type ------------------------------------
 
-// ---- 1. Richtig oder Falsch (0.5 + 0.5 = 1 pt) ----
+// ---- 1. Richtig oder Falsch (0.25 R/F + 0.25 Zitat = 0.5 pt per statement) ----
 function buildRichtigFalschPrompt(params: AIGradeParams): { system: string; user: string } {
   const e = params.extra ?? {};
   const lang = feedbackLang(params.locale);
@@ -578,6 +578,7 @@ function buildRichtigFalschPrompt(params: AIGradeParams): { system: string; user
     system: [
       "You are grading a German language exam (Bac).",
       "You are evaluating a Richtig/Falsch question with a Zitat (citation).",
+      "Each statement is worth 0.5 points total: 0.25 for the R/F choice and 0.25 for the Zitat.",
       "Respond ONLY with valid JSON. No markdown, no extra text.",
     ].join(" "),
     user: [
@@ -587,18 +588,18 @@ function buildRichtigFalschPrompt(params: AIGradeParams): { system: string; user
       `The reference Zitat is: "${refZitat}"`,
       params.originalText ? `The original text passage is: "${params.originalText}"` : "",
       "",
-      "Scoring rules:",
-      `- R/F choice: 0.5 if the student's choice "${rfChoice}" matches the correct answer "${correctRf}" (exact match), 0 if wrong.`,
-      "- Zitat: 0.5 if the student's Zitat correctly supports the answer (even if not word-for-word identical to the reference), 0 if irrelevant or missing.",
+      "Scoring rules (0.5 pts total per statement):",
+      `- R/F choice: 0.25 if the student's choice "${rfChoice}" matches the correct answer "${correctRf}" (exact match), 0 if wrong.`,
+      "- Zitat: 0.25 if the student's Zitat correctly supports the answer (even if not word-for-word identical to the reference), 0 if irrelevant or missing.",
+      "- total_score = rf_score + zitat_score (maximum 0.5)",
       "",
       `Provide feedback in ${lang}. Always provide feedback_de in German.`,
-      "If grading a grammar or language skill, include a lesson suggestion.",
       "",
       "Respond in JSON:",
       '{',
-      '  "rf_score": 0 or 0.5,',
-      '  "zitat_score": 0 or 0.5,',
-      '  "total_score": 0 to 1,',
+      '  "rf_score": 0 or 0.25,',
+      '  "zitat_score": 0 or 0.25,',
+      '  "total_score": 0, 0.25, or 0.5,',
       `  "feedback": "...(in ${lang})...",`,
       '  "feedback_de": "...(German grammar note)...",',
       '  "lesson_suggestion": "...(optional, in ' + lang + ')..."',
@@ -607,7 +608,7 @@ function buildRichtigFalschPrompt(params: AIGradeParams): { system: string; user
   };
 }
 
-// ---- 2. Fragen zum Text (0.5 info + 0.5 method = 1 pt) ----
+// ---- 2. Fragen zum Text (1 pt per question; -0.5 if answer too long or contains unnecessary extra info) ----
 function buildFragenPrompt(params: AIGradeParams): { system: string; user: string } {
   const lang = feedbackLang(params.locale);
 
@@ -615,6 +616,7 @@ function buildFragenPrompt(params: AIGradeParams): { system: string; user: strin
     system: [
       "You are grading a German language exam (Bac).",
       "You are evaluating a reading comprehension answer (Fragen zum Text).",
+      "Each question is worth 1 point. Deduct 0.5 if the answer is too long or contains unnecessary extra information.",
       "Respond ONLY with valid JSON. No markdown, no extra text.",
     ].join(" "),
     user: [
@@ -623,17 +625,21 @@ function buildFragenPrompt(params: AIGradeParams): { system: string; user: strin
       `\nReference answer: "${params.referenceAnswer}"`,
       `Student answer: "${params.studentAnswer}"`,
       "",
-      "Scoring rules (2 independent criteria, each worth 0.5):",
-      "1. info_score (0.5): Does the answer contain the correct information/facts? 0.5 if yes, 0 if wrong or missing.",
-      "2. method_score (0.5): Is it a complete sentence (full answer), not just keywords? 0.5 if full sentence, 0 if just keywords/fragments.",
+      "Scoring rules (1 pt total per question):",
+      "1. info_score (1): Does the answer contain the correct information/facts? 1 if yes, 0 if wrong or missing.",
+      "2. length_penalty (-0.5): Deduct 0.5 if the answer is too long or contains unnecessary extra information beyond what is needed.",
+      "   - Possible total_score values: 1 (correct, no penalty), 0.5 (correct but too long/extra info), or 0 (wrong answer).",
+      "   - Do NOT penalize for length if the answer is simply complete and correct.",
+      "   - Only penalize if the student adds irrelevant details or restates information not asked.",
       "",
       `Provide feedback in ${lang}. Always provide feedback_de in German.`,
+      "If a length penalty is applied, explain briefly why in the feedback.",
       "",
       "Respond in JSON:",
       '{',
-      '  "info_score": 0 or 0.5,',
-      '  "method_score": 0 or 0.5,',
-      '  "total_score": 0 to 1,',
+      '  "info_score": 0 or 1,',
+      '  "length_penalty": 0 or 0.5,',
+      '  "total_score": 0, 0.5, or 1,',
       `  "feedback": "...(in ${lang})...",`,
       '  "feedback_de": "...(German grammar note)...",',
       '  "lesson_suggestion": "...(optional, in ' + lang + ')..."',
@@ -1008,7 +1014,7 @@ export async function gradeWithAI(params: AIGradeParams): Promise<GradeResult> {
       break;
     case "fragen":
       details.info_score = Number(parsed.info_score) || 0;
-      details.method_score = Number(parsed.method_score) || 0;
+      details.method_score = Number(parsed.length_penalty ?? parsed.method_score) || 0;
       break;
     case "uebersetzung":
       details.error_count = Number(parsed.error_count) || 0;
@@ -1067,7 +1073,7 @@ export async function gradeQuestion(
 
   switch (bacType) {
     // ==================================================================
-    // 1. Richtig oder Falsch (AI: 0.5 R/F + 0.5 Zitat)
+    // 1. Richtig oder Falsch (AI: 0.25 R/F + 0.25 Zitat = 0.5 per statement)
     // ==================================================================
     case "richtig_falsch_zitat":
     case "richtig_falsch":
@@ -1103,7 +1109,7 @@ export async function gradeQuestion(
     }
 
     // ==================================================================
-    // 2. Fragen zum Text (AI: 0.5 info + 0.5 method)
+    // 2. Fragen zum Text (AI: 1 pt; -0.5 if too long or unnecessary extra info)
     // ==================================================================
     case "fragen":
     case "fragen_zum_text":

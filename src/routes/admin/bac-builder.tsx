@@ -154,17 +154,17 @@ function BacBuilderPage() {
   const [richtigFalsch, setRichtigFalsch] = useState<RichtigFalschContent>({
     bac_type: "richtig_falsch_zitat",
     statements: [
-      { text: "", is_richtig: true, zitat: "", points: 2 },
-      { text: "", is_richtig: true, zitat: "", points: 2 },
-      { text: "", is_richtig: false, zitat: "", points: 2 },
-      { text: "", is_richtig: true, zitat: "", points: 2 },
+      { text: "", is_richtig: true, zitat: "", points: 0.5 },
+      { text: "", is_richtig: true, zitat: "", points: 0.5 },
+      { text: "", is_richtig: false, zitat: "", points: 0.5 },
+      { text: "", is_richtig: true, zitat: "", points: 0.5 },
     ],
   });
 
   const [fragen, setFragen] = useState<Array<{ id: string; content: FragenZumTextContent; points: number }>>([
-    { id: "fq1", content: { bac_type: "fragen_zum_text", question: "", reference_answer: "" }, points: 2 },
-    { id: "fq2", content: { bac_type: "fragen_zum_text", question: "", reference_answer: "" }, points: 2 },
-    { id: "fq3", content: { bac_type: "fragen_zum_text", question: "", reference_answer: "" }, points: 2 },
+    { id: "fq1", content: { bac_type: "fragen_zum_text", question: "", reference_answer: "" }, points: 1 },
+    { id: "fq2", content: { bac_type: "fragen_zum_text", question: "", reference_answer: "" }, points: 1 },
+    { id: "fq3", content: { bac_type: "fragen_zum_text", question: "", reference_answer: "" }, points: 1 },
   ]);
 
   const [kombinieren, setKombinieren] = useState<KombinierenContent>({
@@ -238,13 +238,14 @@ function BacBuilderPage() {
   const totalPoints =
     richtigFalsch.statements.reduce((s, st) => s + st.points, 0) +
     fragen.reduce((s, f) => s + f.points, 0) +
-    2 + // kombinieren/ergaenzen
+    1 + // kombinieren/ergaenzen
     1 + // titel
-    1 + // synonym
-    1 + // gegenteil
-    1.5 + // uebersetzung
-    1 + // wortbildung
-    1 + 1 + 1 + // gramm 1,2,3
+    0.5 + // synonym
+    0.5 + // gegenteil
+    1 + // uebersetzung
+    0.5 + // wortbildung (Komposita)
+    0.5 + // wortableitung
+    0.5 + 0.5 + 1 + // gramm 1 (Tempus 0.5) + gramm 2 (Tempus 0.5) + gramm 3 (Passiv/Aktiv 1)
     (gramm4 ? 1 : 0) + (gramm5 ? 1 : 0) + (gramm6 ? 1 : 0);
 
   // Save exam
@@ -344,7 +345,7 @@ function BacBuilderPage() {
             type: "matching",
             content: kombinieren,
             prompt_fr: "Was passt zusammen?",
-            points: 2,
+            points: 1,
             grade_method: "auto",
             order_index: fragen.length + 1,
           });
@@ -354,7 +355,7 @@ function BacBuilderPage() {
             type: "fill_blank",
             content: ergaenzen,
             prompt_fr: "Ergänzen Sie mit den passenden Wörtern!",
-            points: 2,
+            points: 1,
             grade_method: "auto",
             order_index: fragen.length + 1,
           });
@@ -391,33 +392,33 @@ function BacBuilderPage() {
         // Wortschatz
         await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "fill_blank", content: synonym,
-          prompt_fr: "Synonym", points: 1, grade_method: "auto", order_index: idx++,
+          prompt_fr: "Synonym", points: 0.5, grade_method: "auto", order_index: idx++,
         });
         await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "fill_blank", content: gegenteil,
-          prompt_fr: "Gegenteil", points: 1, grade_method: "auto", order_index: idx++,
+          prompt_fr: "Gegenteil", points: 0.5, grade_method: "auto", order_index: idx++,
         });
         await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "fill_blank", content: wortbildung,
-          prompt_fr: "Wortbildung", points: 1, grade_method: "auto", order_index: idx++,
+          prompt_fr: "Wortbildung", points: 0.5, grade_method: "auto", order_index: idx++,
         });
         await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "fill_blank", content: wortableitung,
-          prompt_fr: "Wortableitung", points: 1, grade_method: "auto", order_index: idx++,
+          prompt_fr: "Wortableitung", points: 0.5, grade_method: "auto", order_index: idx++,
         });
         await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "short_text", content: uebersetzung,
-          prompt_fr: "Übersetzung", points: 2, grade_method: "ai", order_index: idx++,
+          prompt_fr: "Übersetzung", points: 1, grade_method: "ai", order_index: idx++,
         });
 
         // Grammatik 1-3
         await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "short_text", content: gramm1,
-          prompt_fr: `Setzen Sie ins ${gramm1.tense}!`, points: 1, grade_method: "auto", order_index: idx++,
+          prompt_fr: `Setzen Sie ins ${gramm1.tense}!`, points: 0.5, grade_method: "auto", order_index: idx++,
         });
         await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "short_text", content: gramm2,
-          prompt_fr: `Setzen Sie ins ${gramm2.tense}!`, points: 1, grade_method: "auto", order_index: idx++,
+          prompt_fr: `Setzen Sie ins ${gramm2.tense}!`, points: 0.5, grade_method: "auto", order_index: idx++,
         });
         await supabase.from("exam_questions").insert({
           section_id: sfSec.id, type: "short_text", content: gramm3,
