@@ -329,9 +329,11 @@ function BacBuilderPage() {
         const loadedFragen: Array<{ id: string; content: FragenZumTextContent; points: number }> = [];
 
         // Parse questions and populate state
+        console.log(`Section "${sec.title_fr}" has ${questions.length} questions:`);
         for (const q of questions) {
           const content = q.content as any;
-          if (!content) continue;
+          if (!content) { console.warn("  Question has no content:", q.id); continue; }
+          console.log(`  Loading: bac_type="${content.bac_type}", prompt="${q.prompt_fr}", points=${q.points}`);
 
           switch (content.bac_type) {
             case "richtig_falsch_zitat":
@@ -399,6 +401,20 @@ function BacBuilderPage() {
         }
       }
 
+      console.log("=== LOAD SUMMARY ===");
+      console.log("R/F statements:", richtigFalsch.statements?.length ?? 0);
+      console.log("Fragen:", loadedFragen.length);
+      console.log("Q3 type:", q3Type);
+      console.log("Synonym:", synonym.sentence ? "✓" : "empty");
+      console.log("Gegenteil:", gegenteil.sentence ? "✓" : "empty");
+      console.log("Wortbildung:", wortbildung.bac_type ? "✓" : "empty");
+      console.log("Übersetzung:", uebersetzung.german_sentence ? "✓" : "empty");
+      console.log("Gramm1:", gramm1.original_sentence ? "✓" : "empty");
+      console.log("Gramm2:", gramm2.original_sentence ? "✓" : "empty");
+      console.log("Gramm3:", gramm3.original_sentence ? "✓" : "empty");
+      console.log("Gramm4:", gramm4 ? "✓" : "null");
+      console.log("Gramm5:", gramm5 ? "✓" : "null");
+      console.log("Gramm6:", gramm6 ? "✓" : "null");
       toast.success("Examen chargé pour modification");
     }
 
