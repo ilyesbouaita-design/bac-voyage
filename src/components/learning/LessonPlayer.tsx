@@ -647,7 +647,10 @@ function CompletionScreen({
 // LessonPlayer (main export)
 // ---------------------------------------------------------------------------
 
-export function LessonPlayer({ lessonTitle, blocks, onComplete, onExit }: LessonPlayerProps) {
+export function LessonPlayer({ lessonTitle, blocks: rawBlocks, onComplete, onExit }: LessonPlayerProps) {
+  // Safety: ensure blocks is always a valid array
+  const blocks = Array.isArray(rawBlocks) ? rawBlocks : [];
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [completedBlocks, setCompletedBlocks] = useState<Set<number>>(new Set());
   const [blockScores, setBlockScores] = useState<Record<string, number>>({});
@@ -658,7 +661,21 @@ export function LessonPlayer({ lessonTitle, blocks, onComplete, onExit }: Lesson
   const [lastScore, setLastScore] = useState(0);
 
   const totalBlocks = blocks.length;
-  const currentBlock = blocks[currentIndex];
+  const currentBlock = totalBlocks > 0 ? blocks[currentIndex] : null;
+
+  // Empty lesson — nothing to play
+  if (totalBlocks === 0) {
+    return (
+      <div style={{ ...FONT, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", gap: "16px", background: "#fafaf8" }}>
+        <span style={{ fontSize: "48px" }}>📭</span>
+        <p style={{ fontWeight: "bold", fontSize: "14px" }}>Cette leçon est vide.</p>
+        <p style={{ color: GRAY }}>Aucun bloc n'a été ajouté à cette leçon.</p>
+        <button onClick={onExit} style={{ ...FONT, background: VIOLET, color: "#fff", border: "none", borderRadius: "12px", padding: "10px 24px", cursor: "pointer", fontWeight: "bold" }}>
+          ← Retour
+        </button>
+      </div>
+    );
+  }
   const isCurrentCompleted = completedBlocks.has(currentIndex);
   const isLastBlock = currentIndex === totalBlocks - 1;
 
