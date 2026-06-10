@@ -1,14 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/useAuth";
 import { useLocale } from "@/lib/useLocale";
 import { dashboardTranslations } from "@/lib/i18n-dashboard";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { supabase } from "@/lib/supabase";
 import { EINHEITEN, type Einheit } from "@/lib/einheiten";
-import ProgressTracker from "@/components/learning/ProgressTracker";
-import type { ContentBlock, BlockProgress } from "@/lib/learning-types";
-import { isBlockUnlocked, UNLOCK_THRESHOLD } from "@/lib/learning-types";
+import { LessonPlayer } from "@/components/learning/LessonPlayer";
 
 export const Route = createFileRoute("/dashboard/wortschatz")({
   component: WortschatzPage,
@@ -16,64 +14,28 @@ export const Route = createFileRoute("/dashboard/wortschatz")({
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface EinheitProgress {
-  einheitId: string;
-  exerciseCount: number;
-  completedCount: number;
-  vocabSetId: string | null;
+interface LessonBlock {
+  id: string;
+  type: string;
+  title_fr: string;
+  content: Record<string, unknown>;
+  points: number;
+  order_index: number;
 }
 
-// ─── localStorage progress helpers ───────────────────────────────────────────
-
-function progressKey(studentId: string, blockId: string): string {
-  return `bac-progress-${studentId}-${blockId}`;
-}
-
-function loadProgress(studentId: string, blockId: string): BlockProgress | null {
-  try {
-    const raw = localStorage.getItem(progressKey(studentId, blockId));
-    if (!raw) return null;
-    return JSON.parse(raw) as BlockProgress;
-  } catch {
-    return null;
-  }
-}
-
-function saveProgress(progress: BlockProgress): void {
-  try {
-    localStorage.setItem(
-      progressKey(progress.student_id, progress.block_id),
-      JSON.stringify(progress),
-    );
-  } catch {
-    /* ignore */
-  }
-}
-
-function loadAllProgresses(studentId: string, blocks: ContentBlock[]): BlockProgress[] {
-  return blocks
-    .map((b) => loadProgress(studentId, b.id))
-    .filter((p): p is BlockProgress => p !== null);
-}
-
-// ─── ExerciseRenderer import (graceful) ──────────────────────────────────────
-
-let ExerciseRenderer: React.ComponentType<{
-  block: ContentBlock;
-  locale: "fr" | "ar";
-  onComplete: (score: number) => void;
-}> | null = null;
-
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  ExerciseRenderer = require("@/components/learning/ExerciseRenderer").default;
-} catch {
-  ExerciseRenderer = null;
+interface Lesson {
+  id: string;
+  topic_id: string;
+  title_fr: string;
+  title_ar?: string | null;
+  body_fr: { blocks: LessonBlock[] } | null;
+  order_index: number;
+  is_published: boolean;
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
-function SpinnerIcon({ color = "#0FB6A3" }: { color?: string }) {
+function SpinnerIcon({ color = "#FFB200" }: { color?: string }) {
   return (
     <svg
       style={{ animation: "spin 1s linear infinite", width: 32, height: 32, color }}
@@ -83,8 +45,8 @@ function SpinnerIcon({ color = "#0FB6A3" }: { color?: string }) {
       aria-hidden="true"
     >
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.25" />
+      <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
   );
 }
@@ -143,67 +105,72 @@ function ArrowLeftIcon() {
   );
 }
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
+// ─── localStorage lesson completion helpers ───────────────────────────────────
 
-function Toast({ message, onDone }: { message: string; onDone: () => void }) {
-  useEffect(() => {
-    const t = setTimeout(onDone, 3000);
-    return () => clearTimeout(t);
-  }, [onDone]);
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        bottom: 24,
-        right: 24,
-        zIndex: 9999,
-        background: "#22c55e",
-        color: "#fff",
-        borderRadius: 12,
-        padding: "12px 20px",
-        fontFamily: "'Times New Roman', Times, serif",
-        fontSize: 12,
-        fontWeight: 700,
-        boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
-        animation: "slideUp 0.25s ease",
-      }}
-    >
-      <style>{`@keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }`}</style>
-      {message}
-    </div>
-  );
+function lessonCompletionKey(studentId: string, lessonId: string): string {
+  return `bac-ws-lesson-complete-${studentId}-${lessonId}`;
 }
 
-// ─── Progress bar ─────────────────────────────────────────────────────────────
-
-function ProgressBar({ value, color = "#0FB6A3" }: { value: number; color?: string }) {
-  return (
-    <div style={{ height: 6, background: "#e5e7eb", borderRadius: 999, overflow: "hidden" }}>
-      <div
-        style={{
-          height: "100%",
-          width: `${Math.min(100, Math.max(0, value))}%`,
-          background: value >= 100 ? "#22c55e" : color,
-          borderRadius: 999,
-          transition: "width 0.4s ease",
-        }}
-      />
-    </div>
-  );
+function isLessonCompleted(studentId: string, lessonId: string): boolean {
+  try {
+    return !!localStorage.getItem(lessonCompletionKey(studentId, lessonId));
+  } catch {
+    return false;
+  }
 }
 
-// ─── Einheit List View ────────────────────────────────────────────────────────
+function saveLessonCompletion(
+  studentId: string,
+  lessonId: string,
+  results: { totalStars: number; totalXp: number; scores: Record<string, number> },
+): void {
+  try {
+    localStorage.setItem(
+      lessonCompletionKey(studentId, lessonId),
+      JSON.stringify({ completedAt: new Date().toISOString(), ...results }),
+    );
+  } catch {
+    /* ignore quota errors */
+  }
+}
+
+// ─── Anchor topic lookup ──────────────────────────────────────────────────────
+// Returns the grammar_topics id for a ws-einheit-XX anchor, or null if not yet created.
+
+async function findWortschatzAnchorId(einheitId: string): Promise<string | null> {
+  const slug = `ws-${einheitId}`;
+  const { data } = await supabase
+    .from("grammar_topics")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
+// ─── Einheit list view ────────────────────────────────────────────────────────
+
+interface EinheitWithCount {
+  einheit: Einheit;
+  lessonCount: number;
+}
 
 interface EinheitListProps {
-  progressMap: Record<string, EinheitProgress>;
-  progressLoading: boolean;
+  einheiten: EinheitWithCount[];
+  loading: boolean;
   locale: "fr" | "ar";
   onSelect: (einheitId: string) => void;
 }
 
-function EinheitList({ progressMap, progressLoading, locale, onSelect }: EinheitListProps) {
+function EinheitList({ einheiten, loading, locale, onSelect }: EinheitListProps) {
   const isRtl = locale === "ar";
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", padding: "64px 0" }}>
+        <SpinnerIcon />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -214,12 +181,7 @@ function EinheitList({ progressMap, progressLoading, locale, onSelect }: Einheit
         direction: isRtl ? "rtl" : "ltr",
       }}
     >
-      {EINHEITEN.map((einheit) => {
-        const prog = progressMap[einheit.id];
-        const exerciseCount = prog?.exerciseCount ?? 0;
-        const completedCount = prog?.completedCount ?? 0;
-        const pct = exerciseCount > 0 ? Math.round((completedCount / exerciseCount) * 100) : 0;
-        const allDone = exerciseCount > 0 && completedCount >= exerciseCount && pct >= 70;
+      {einheiten.map(({ einheit, lessonCount }) => {
         const subtitle = locale === "ar" ? einheit.title_ar : einheit.title_fr;
 
         return (
@@ -254,41 +216,34 @@ function EinheitList({ progressMap, progressLoading, locale, onSelect }: Einheit
             }}
           >
             {/* Top row */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: "50%",
-                    background: `${einheit.color}22`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 22,
-                    flexShrink: 0,
-                  }}
-                >
-                  {einheit.icon}
-                </div>
-                <span
-                  style={{
-                    background: einheit.color,
-                    color: "#fff",
-                    borderRadius: 999,
-                    padding: "2px 10px",
-                    fontWeight: 700,
-                    fontSize: 11,
-                  }}
-                >
-                  Einheit {einheit.number}
-                </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: "50%",
+                  background: `${einheit.color}22`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 22,
+                  flexShrink: 0,
+                }}
+              >
+                {einheit.icon}
               </div>
-              {allDone && (
-                <span style={{ background: "#dcfce7", color: "#16a34a", borderRadius: 999, padding: "2px 10px", fontWeight: 700 }}>
-                  Complété ✓
-                </span>
-              )}
+              <span
+                style={{
+                  background: einheit.color,
+                  color: "#fff",
+                  borderRadius: 999,
+                  padding: "2px 10px",
+                  fontWeight: 700,
+                  fontSize: 11,
+                }}
+              >
+                Einheit {einheit.number}
+              </span>
             </div>
 
             {/* Titles */}
@@ -301,22 +256,12 @@ function EinheitList({ progressMap, progressLoading, locale, onSelect }: Einheit
               </div>
             </div>
 
-            {/* Progress */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {progressLoading ? (
-                <div style={{ height: 6, background: "#f3f4f6", borderRadius: 999 }} />
-              ) : (
-                <>
-                  <ProgressBar value={pct} color={einheit.color} />
-                  <div style={{ display: "flex", justifyContent: "space-between", color: "#6b7280" }}>
-                    <span>
-                      {completedCount} / {exerciseCount}{" "}
-                      {locale === "ar" ? "كتلة مكتملة" : "blocs complétés"}
-                    </span>
-                    <span style={{ color: einheit.color, fontWeight: 700 }}>{pct}%</span>
-                  </div>
-                </>
-              )}
+            {/* Lesson count */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#6b7280" }}>
+              <span>
+                {lessonCount}{" "}
+                {locale === "ar" ? "درس" : `leçon${lessonCount !== 1 ? "s" : ""}`}
+              </span>
             </div>
 
             {/* Arrow */}
@@ -330,24 +275,23 @@ function EinheitList({ progressMap, progressLoading, locale, onSelect }: Einheit
   );
 }
 
-// ─── Einheit Detail View ──────────────────────────────────────────────────────
+// ─── Einheit detail view ──────────────────────────────────────────────────────
 
 interface EinheitDetailProps {
   einheit: Einheit;
   studentId: string;
   locale: "fr" | "ar";
   onBack: () => void;
+  onPlayLesson: (lesson: Lesson) => void;
 }
 
-function EinheitDetail({ einheit, studentId, locale, onBack }: EinheitDetailProps) {
+const LESSON_COLORS = ["#6C4CE0", "#0FB6A3", "#FFB200", "#FF5A5F"];
+
+function EinheitDetail({ einheit, studentId, locale, onBack, onPlayLesson }: EinheitDetailProps) {
   const isRtl = locale === "ar";
 
-  const [blocks, setBlocks] = useState<ContentBlock[]>([]);
-  const [progresses, setProgresses] = useState<BlockProgress[]>([]);
-  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -355,116 +299,32 @@ function EinheitDetail({ einheit, studentId, locale, onBack }: EinheitDetailProp
     async function load() {
       setLoading(true);
 
-      // Find the vocab_set matching this einheit slug
-      const { data: setData } = await supabase
-        .from("vocab_sets")
-        .select("id")
-        .eq("slug", einheit.id)
-        .maybeSingle();
+      // Find the ws anchor topic
+      const topicId = await findWortschatzAnchorId(einheit.id);
 
       if (!active) return;
 
-      const vocabSetId = setData?.id ?? null;
-
-      let fetchedBlocks: ContentBlock[] = [];
-
-      if (vocabSetId) {
-        const { data: blockData } = await supabase
-          .from("exercises")
-          .select("*")
-          .eq("set_id", vocabSetId)
-          .eq("pillar", "wortschatz")
-          .eq("is_published", true)
-          .order("order_index", { ascending: true });
-        fetchedBlocks = (blockData ?? []) as ContentBlock[];
+      if (!topicId) {
+        setLessons([]);
+        setLoading(false);
+        return;
       }
 
+      const { data: lessonsData } = await supabase
+        .from("lessons")
+        .select("*")
+        .eq("topic_id", topicId)
+        .eq("is_published", true)
+        .order("order_index", { ascending: true });
+
       if (!active) return;
-
-      const fetchedProgress = loadAllProgresses(studentId, fetchedBlocks);
-      setBlocks(fetchedBlocks);
-      setProgresses(fetchedProgress);
-
-      // Auto-select first unlocked incomplete block
-      const mediaTypes = ["youtube", "image", "audio", "pdf"];
-      const firstActive = fetchedBlocks.find((b, i) => {
-        const prog = fetchedProgress.find((p) => p.block_id === b.id);
-        const isMedia = mediaTypes.includes(b.type);
-        const done = isMedia ? (prog?.completed ?? false) : (prog?.best_score ?? 0) >= UNLOCK_THRESHOLD;
-        const unlocked = isBlockUnlocked(i, fetchedProgress, fetchedBlocks);
-        return unlocked && !done;
-      });
-      setActiveBlockId(firstActive?.id ?? fetchedBlocks[0]?.id ?? null);
+      setLessons((lessonsData ?? []) as Lesson[]);
       setLoading(false);
     }
 
     load();
     return () => { active = false; };
-  }, [einheit.id, studentId]);
-
-  const handleBlockClick = useCallback((blockId: string) => {
-    const idx = blocks.findIndex((b) => b.id === blockId);
-    const unlocked = isBlockUnlocked(idx, progresses, blocks);
-    if (!unlocked) {
-      if (toastTimer.current) clearTimeout(toastTimer.current);
-      setToast(
-        locale === "ar"
-          ? "أكمل التمرين السابق بنسبة 70% على الأقل لفتح هذا."
-          : "Complétez l'exercice précédent avec au moins 70% pour débloquer.",
-      );
-      toastTimer.current = setTimeout(() => setToast(null), 3000);
-      return;
-    }
-    setActiveBlockId(blockId);
-  }, [blocks, progresses, locale]);
-
-  const handleComplete = useCallback((score: number) => {
-    if (!activeBlockId) return;
-
-    const existing = progresses.find((p) => p.block_id === activeBlockId);
-    const newProg: BlockProgress = {
-      block_id: activeBlockId,
-      student_id: studentId,
-      completed: true,
-      score,
-      attempts: (existing?.attempts ?? 0) + 1,
-      best_score: Math.max(existing?.best_score ?? 0, score),
-      completed_at: new Date().toISOString(),
-    };
-
-    saveProgress(newProg);
-    setProgresses((prev) => [...prev.filter((p) => p.block_id !== activeBlockId), newProg]);
-
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    const msg = locale === "ar"
-      ? `تم إنهاء التمرين! النتيجة: ${score}%`
-      : `Exercice terminé ! Score : ${score}%`;
-    setToast(msg);
-    toastTimer.current = setTimeout(() => setToast(null), 3000);
-
-    if (score >= UNLOCK_THRESHOLD) {
-      const currentIdx = blocks.findIndex((b) => b.id === activeBlockId);
-      const nextBlock = blocks[currentIdx + 1];
-      if (nextBlock) {
-        setTimeout(() => setActiveBlockId(nextBlock.id), 1200);
-      }
-    }
-  }, [activeBlockId, studentId, progresses, blocks, locale]);
-
-  const activeBlock = blocks.find((b) => b.id === activeBlockId) ?? null;
-  const activeBlockIdx = blocks.findIndex((b) => b.id === activeBlockId);
-  const activeUnlocked = activeBlockIdx >= 0
-    ? isBlockUnlocked(activeBlockIdx, progresses, blocks)
-    : false;
-
-  const overallPct = blocks.length === 0 ? 0 : Math.round(
-    (progresses.filter((p) => {
-      const b = blocks.find((bl) => bl.id === p.block_id);
-      if (!b) return false;
-      const isMedia = ["youtube", "image", "audio", "pdf"].includes(b.type);
-      return isMedia ? p.completed : p.best_score >= UNLOCK_THRESHOLD;
-    }).length / blocks.length) * 100,
-  );
+  }, [einheit.id]);
 
   const subtitle = locale === "ar" ? einheit.title_ar : einheit.title_fr;
 
@@ -508,7 +368,7 @@ function EinheitDetail({ einheit, studentId, locale, onBack }: EinheitDetailProp
         <>
           {/* Einheit header */}
           <div style={{ marginBottom: 24 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div
                 style={{
                   width: 48,
@@ -524,134 +384,147 @@ function EinheitDetail({ einheit, studentId, locale, onBack }: EinheitDetailProp
                 {einheit.icon}
               </div>
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <h1
-                    style={{
-                      fontFamily: "'Times New Roman', Times, serif",
-                      fontSize: 20,
-                      fontWeight: 700,
-                      color: "#111827",
-                      margin: 0,
-                    }}
-                  >
-                    Einheit {einheit.number}: {einheit.title_de}
-                  </h1>
-                  <span
-                    style={{
-                      background: einheit.color,
-                      color: "#fff",
-                      borderRadius: 999,
-                      padding: "2px 10px",
-                      fontWeight: 700,
-                      fontSize: 11,
-                    }}
-                  >
-                    Einheit {einheit.number}
-                  </span>
-                </div>
-                <p style={{ color: "#6b7280", margin: "4px 0 0", fontFamily: "'Times New Roman', Times, serif", fontSize: 12 }}>
+                <h1
+                  style={{
+                    fontFamily: "'Times New Roman', Times, serif",
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: "#111827",
+                    margin: 0,
+                  }}
+                >
+                  Einheit {einheit.number}: {einheit.title_de}
+                </h1>
+                <p style={{
+                  color: "#6b7280",
+                  margin: "4px 0 0",
+                  fontFamily: "'Times New Roman', Times, serif",
+                  fontSize: 12,
+                }}>
                   {subtitle}
                 </p>
+                <span
+                  style={{
+                    display: "inline-block",
+                    background: `${einheit.color}22`,
+                    color: einheit.color,
+                    borderRadius: 999,
+                    padding: "2px 10px",
+                    fontWeight: 600,
+                    marginTop: 4,
+                    fontFamily: "'Times New Roman', Times, serif",
+                    fontSize: 12,
+                  }}
+                >
+                  {lessons.length} {locale === "ar" ? "درس" : `leçon${lessons.length !== 1 ? "s" : ""}`}
+                </span>
               </div>
-            </div>
-
-            {/* Progress bar */}
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, color: "#374151", fontFamily: "'Times New Roman', Times, serif", fontSize: 12 }}>
-                <span>{locale === "ar" ? "تقدم الوحدة" : "Progression de l'unité"}</span>
-                <span style={{ fontWeight: 700, color: einheit.color }}>{overallPct}%</span>
-              </div>
-              <ProgressBar value={overallPct} color={einheit.color} />
             </div>
           </div>
 
-          {/* Split layout */}
-          <div
-            className="wortschatz-split"
-            style={{ display: "flex", gap: 24, alignItems: "flex-start" }}
-          >
-            <style>{`
-              @media (max-width: 768px) {
-                .wortschatz-split { flex-direction: column !important; }
-                .wortschatz-tracker { width: 100% !important; }
-              }
-            `}</style>
-
-            {/* ProgressTracker sidebar */}
-            <div
-              className="wortschatz-tracker"
-              style={{
-                width: 250,
-                flexShrink: 0,
-                background: "#fff",
-                borderRadius: 16,
-                padding: 16,
-                border: "1px solid #f3f4f6",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-              }}
-            >
-              <ProgressTracker
-                blocks={blocks}
-                progresses={progresses}
-                activeBlockId={activeBlockId}
-                onBlockClick={handleBlockClick}
-                locale={locale}
-              />
+          {/* Lesson cards */}
+          {lessons.length === 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "80px 0", textAlign: "center" }}>
+              <span style={{ fontSize: 48 }}>📖</span>
+              <p style={{ marginTop: 16, color: "#6b7280", fontWeight: 600, fontFamily: "'Times New Roman', Times, serif", fontSize: 12 }}>
+                {locale === "ar" ? "لا توجد دروس منشورة بعد." : "Aucune leçon publiée pour le moment."}
+              </p>
             </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {lessons.map((lesson, idx) => {
+                const lessonColor = LESSON_COLORS[idx % LESSON_COLORS.length];
+                const blockCount = lesson.body_fr?.blocks?.length ?? 0;
+                const completed = isLessonCompleted(studentId, lesson.id);
 
-            {/* Exercise area */}
-            <div
-              style={{
-                flex: 1,
-                minWidth: 0,
-                background: "#fff",
-                borderRadius: 16,
-                border: "1px solid #f3f4f6",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-                overflow: "hidden",
-              }}
-            >
-              {!activeBlock ? (
-                <div style={{ padding: 32, textAlign: "center", color: "#9ca3af" }}>
-                  <span style={{ fontSize: 40 }}>📚</span>
-                  <p style={{ marginTop: 12, fontFamily: "'Times New Roman', Times, serif", fontSize: 12 }}>
-                    {blocks.length === 0
-                      ? (locale === "ar" ? "لا توجد تمارين في هذه الوحدة بعد." : "Aucun exercice dans cette unité pour le moment.")
-                      : (locale === "ar" ? "اختر تمريناً من القائمة." : "Sélectionnez un exercice dans le parcours.")}
-                  </p>
-                </div>
-              ) : !activeUnlocked ? (
-                <div style={{ padding: 32, textAlign: "center" }}>
-                  <span style={{ fontSize: 40 }}>🔒</span>
-                  <p style={{ marginTop: 12, fontFamily: "'Times New Roman', Times, serif", fontSize: 12, color: "#6b7280" }}>
-                    {locale === "ar"
-                      ? "أكمل التمرين السابق بنسبة 70% على الأقل لفتح هذا."
-                      : "Complétez l'exercice précédent avec au moins 70% pour débloquer."}
-                  </p>
-                </div>
-              ) : ExerciseRenderer ? (
-                <ExerciseRenderer
-                  block={activeBlock}
-                  locale={locale}
-                  onComplete={handleComplete}
-                />
-              ) : (
-                <div style={{ padding: 32, textAlign: "center", color: "#9ca3af" }}>
-                  <span style={{ fontSize: 40 }}>⚙️</span>
-                  <p style={{ marginTop: 12, fontFamily: "'Times New Roman', Times, serif", fontSize: 12 }}>
-                    {locale === "ar" ? "جاري تحميل التمرين..." : "Chargement de l'exercice…"}
-                  </p>
-                  <p style={{ marginTop: 8, color: "#d1d5db", fontFamily: "'Times New Roman', Times, serif", fontSize: 12 }}>
-                    Type: <strong>{activeBlock.type}</strong> — {locale === "ar" ? (activeBlock.title_ar ?? activeBlock.title_fr) : activeBlock.title_fr}
-                  </p>
-                </div>
-              )}
+                return (
+                  <div
+                    key={lesson.id}
+                    style={{
+                      background: "#fff",
+                      border: "1px solid #f3f4f6",
+                      borderLeft: `4px solid ${lessonColor}`,
+                      borderRadius: 12,
+                      padding: "16px 20px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 16,
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                      fontFamily: "'Times New Roman', Times, serif",
+                      fontSize: 12,
+                    }}
+                  >
+                    {/* Number badge */}
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        background: `${lessonColor}22`,
+                        color: lessonColor,
+                        fontWeight: 700,
+                        fontSize: 13,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {idx + 1}
+                    </span>
+
+                    {/* Title + meta */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, color: "#111827", fontSize: 13 }}>{lesson.title_fr}</div>
+                      <div style={{ color: "#6b7280", marginTop: 2 }}>
+                        {blockCount} bloc{blockCount !== 1 ? "s" : ""}
+                        {completed && (
+                          <span
+                            style={{
+                              marginLeft: 10,
+                              background: "#dcfce7",
+                              color: "#16a34a",
+                              borderRadius: 999,
+                              padding: "1px 8px",
+                              fontWeight: 700,
+                              fontSize: 11,
+                            }}
+                          >
+                            Complété ✓
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Play button */}
+                    <button
+                      type="button"
+                      onClick={() => onPlayLesson(lesson)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        background: lessonColor,
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 8,
+                        padding: "7px 16px",
+                        cursor: "pointer",
+                        fontWeight: 700,
+                        fontFamily: "'Times New Roman', Times, serif",
+                        fontSize: 12,
+                        flexShrink: 0,
+                      }}
+                    >
+                      ▶ {locale === "ar" ? "تشغيل" : "Jouer"}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          )}
         </>
       )}
-
-      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </div>
   );
 }
@@ -663,9 +536,10 @@ function WortschatzPage() {
   const { locale, setLocale } = useLocale();
   const t = dashboardTranslations[locale];
 
-  const [progressMap, setProgressMap] = useState<Record<string, EinheitProgress>>({});
-  const [progressLoading, setProgressLoading] = useState(true);
+  const [einheitenWithCounts, setEinheitenWithCounts] = useState<{ einheit: Einheit; lessonCount: number }[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
+  const [playingLesson, setPlayingLesson] = useState<Lesson | null>(null);
 
   const sidebarItems = [
     { label: t.sidebar_overview, to: "/dashboard", icon: <HomeIcon /> },
@@ -674,57 +548,39 @@ function WortschatzPage() {
     { label: t.sidebar_exams, to: "/dashboard/bac", icon: <GraduationCapIcon /> },
   ];
 
-  // Fetch exercise counts + student progress per einheit
+  // Fetch published lesson counts per einheit
   useEffect(() => {
     if (auth.loading || !auth.userId) return;
 
     let active = true;
 
-    async function fetchProgress() {
-      setProgressLoading(true);
+    async function fetchCounts() {
+      setDataLoading(true);
 
-      const map: Record<string, EinheitProgress> = {};
-
-      await Promise.all(
+      const result = await Promise.all(
         EINHEITEN.map(async (einheit) => {
-          // Find the vocab_set for this einheit slug
-          const { data: setData } = await supabase
-            .from("vocab_sets")
-            .select("id")
-            .eq("slug", einheit.id)
-            .maybeSingle();
+          const topicId = await findWortschatzAnchorId(einheit.id);
 
-          const vocabSetId = setData?.id ?? null;
-
-          if (!vocabSetId) {
-            map[einheit.id] = { einheitId: einheit.id, exerciseCount: 0, completedCount: 0, vocabSetId: null };
-            return;
+          if (!topicId) {
+            return { einheit, lessonCount: 0 };
           }
 
-          const { data: blockData } = await supabase
-            .from("exercises")
-            .select("id")
-            .eq("set_id", vocabSetId)
-            .eq("pillar", "wortschatz")
+          const { count } = await supabase
+            .from("lessons")
+            .select("id", { count: "exact", head: true })
+            .eq("topic_id", topicId)
             .eq("is_published", true);
 
-          const blocks = (blockData ?? []) as { id: string }[];
-          const exerciseCount = blocks.length;
-          const completedCount = blocks.filter((b) => {
-            const p = loadProgress(auth.userId!, b.id);
-            return p ? (p.best_score >= UNLOCK_THRESHOLD || p.completed) : false;
-          }).length;
-
-          map[einheit.id] = { einheitId: einheit.id, exerciseCount, completedCount, vocabSetId };
+          return { einheit, lessonCount: count ?? 0 };
         }),
       );
 
       if (!active) return;
-      setProgressMap(map);
-      setProgressLoading(false);
+      setEinheitenWithCounts(result);
+      setDataLoading(false);
     }
 
-    fetchProgress();
+    fetchCounts();
     return () => { active = false; };
   }, [auth.loading, auth.userId]);
 
@@ -738,6 +594,21 @@ function WortschatzPage() {
 
   const isRtl = locale === "ar";
   const selectedEinheit = selectedUnit ? EINHEITEN.find((e) => e.id === selectedUnit) ?? null : null;
+
+  // If a lesson is being played, render LessonPlayer fullscreen (outside DashboardLayout)
+  if (playingLesson) {
+    return (
+      <LessonPlayer
+        lessonTitle={playingLesson.title_fr}
+        blocks={playingLesson.body_fr?.blocks ?? []}
+        onComplete={(results) => {
+          saveLessonCompletion(auth.userId!, playingLesson.id, results);
+          setPlayingLesson(null);
+        }}
+        onExit={() => setPlayingLesson(null)}
+      />
+    );
+  }
 
   return (
     <DashboardLayout
@@ -778,8 +649,8 @@ function WortschatzPage() {
             </div>
 
             <EinheitList
-              progressMap={progressMap}
-              progressLoading={progressLoading}
+              einheiten={einheitenWithCounts}
+              loading={dataLoading}
               locale={locale}
               onSelect={setSelectedUnit}
             />
@@ -790,6 +661,7 @@ function WortschatzPage() {
             studentId={auth.userId!}
             locale={locale}
             onBack={() => setSelectedUnit(null)}
+            onPlayLesson={setPlayingLesson}
           />
         )}
       </div>
