@@ -6,6 +6,7 @@ import { useLocale } from "@/lib/useLocale";
 import { dashboardTranslations } from "@/lib/i18n-dashboard";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import BlockPicker from "@/components/learning/BlockPicker";
+import { BlockEditor } from "@/components/learning/BlockEditor";
 import { BLOCK_TYPES, type ContentBlockType } from "@/lib/learning-types";
 
 export const Route = createFileRoute("/admin/grammatik-units")({
@@ -258,20 +259,12 @@ interface NewLessonBlockFormProps {
 function NewLessonBlockForm({ selectedType, onSave, onCancel }: NewLessonBlockFormProps) {
   const [titleFr, setTitleFr] = useState("");
   const [points, setPoints] = useState(10);
-  const [contentJson, setContentJson] = useState("{}");
-  const [error, setError] = useState<string | null>(null);
+  const [content, setContent] = useState<Record<string, unknown>>({});
 
   const color = blockTypeColor(selectedType);
 
   function handleSave() {
-    let parsedContent: Record<string, unknown> = {};
-    try {
-      parsedContent = JSON.parse(contentJson);
-    } catch {
-      setError("JSON invalide. Vérifiez le contenu.");
-      return;
-    }
-    onSave({ type: selectedType, title_fr: titleFr, content: parsedContent, points });
+    onSave({ type: selectedType, title_fr: titleFr, content, points });
   }
 
   return (
@@ -283,49 +276,18 @@ function NewLessonBlockForm({ selectedType, onSave, onCancel }: NewLessonBlockFo
       padding: 12,
       marginTop: 8,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <span style={{ ...TM, background: `${color}22`, color, padding: "2px 7px", borderRadius: 999, fontWeight: 600, fontSize: 11 }}>
-          {blockTypeLabel(selectedType)}
-        </span>
-        <span style={{ ...TM, color: "#6b7280" }}>Nouveau bloc</span>
-      </div>
+      {/* Visual block editor — proper forms for each type */}
+      <BlockEditor
+        type={selectedType}
+        content={content}
+        onChange={setContent}
+        title={titleFr}
+        onTitleChange={setTitleFr}
+        points={points}
+        onPointsChange={setPoints}
+      />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: 8, marginBottom: 8 }}>
-        <div>
-          <label style={{ ...TM, display: "block", color: "#374151", marginBottom: 3, fontWeight: 600 }}>Titre (FR)</label>
-          <input
-            value={titleFr}
-            onChange={(e) => setTitleFr(e.target.value)}
-            placeholder="Titre du bloc..."
-            style={{ ...TM, width: "100%", padding: "5px 9px", border: "1px solid #d1d5db", borderRadius: 6, outline: "none", boxSizing: "border-box" }}
-          />
-        </div>
-        <div>
-          <label style={{ ...TM, display: "block", color: "#374151", marginBottom: 3, fontWeight: 600 }}>Points</label>
-          <input
-            type="number"
-            value={points}
-            onChange={(e) => setPoints(Number(e.target.value))}
-            min={0}
-            style={{ ...TM, width: "100%", padding: "5px 9px", border: "1px solid #d1d5db", borderRadius: 6, outline: "none", boxSizing: "border-box" }}
-          />
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 8 }}>
-        <label style={{ ...TM, display: "block", color: "#374151", marginBottom: 3, fontWeight: 600 }}>Contenu JSON</label>
-        <textarea
-          value={contentJson}
-          onChange={(e) => setContentJson(e.target.value)}
-          rows={5}
-          spellCheck={false}
-          style={{ ...TM, width: "100%", padding: "6px 9px", border: "1px solid #d1d5db", borderRadius: 6, outline: "none", resize: "vertical", fontFamily: "monospace", fontSize: 11, boxSizing: "border-box" }}
-        />
-      </div>
-
-      {error && <p style={{ ...TM, color: "#FF5A5F", marginBottom: 6 }}>{error}</p>}
-
-      <div style={{ display: "flex", gap: 6 }}>
+      <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
         <button
           onClick={handleSave}
           style={{ ...TM, background: "#6C4CE0", color: "#fff", border: "none", borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontWeight: 600 }}
