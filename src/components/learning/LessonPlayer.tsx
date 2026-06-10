@@ -102,10 +102,13 @@ function MediaBlock({ block }: { block: LessonBlock }) {
   };
 
   if (type === "youtube") {
+    // BlockEditor's YoutubeEditor saves the URL under `content.url`.
+    // Also tolerate `videoUrl` / `videoId` for already-normalized content.
+    const rawUrl = content?.videoUrl || content?.url || "";
     const videoId =
       content?.videoId ||
-      (content?.videoUrl
-        ? content.videoUrl.replace(/.*(?:youtu\.be\/|v=)/, "").split("&")[0]
+      (rawUrl
+        ? rawUrl.replace(/.*(?:youtu\.be\/|shorts\/|embed\/|v=)/, "").split(/[&?]/)[0]
         : null);
     return (
       <div style={containerStyle}>
@@ -123,7 +126,7 @@ function MediaBlock({ block }: { block: LessonBlock }) {
           />
         ) : (
           <div style={{ padding: "16px", background: "#f1f5f9", borderRadius: "8px" }}>
-            YouTube: {content?.videoUrl || "URL manquante"}
+            YouTube: {rawUrl || "URL manquante"}
           </div>
         )}
       </div>
@@ -218,24 +221,132 @@ function ExerciseBlock({ block, onComplete }: { block: LessonBlock; onComplete: 
   // Ensure arrays exist — prevent .map() on undefined
   const safe = (arr: any) => (Array.isArray(arr) ? arr : []);
 
+  // ----------------------------------------------------------------------
+  // Normalization helpers
+  // The admin BlockEditor saves content under one set of field names; the
+  // student exercise components expect a different shape. These helpers
+  // transform the saved `content` into the props each component expects,
+  // tolerating both the editor shape and the already-normalized shape.
+  // ----------------------------------------------------------------------
+
+  // Split a comma-separated string (or pass through an existing array).
+  const toList = (v: any): string[] => {
+    if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
+    if (typeof v === "string") return v.split(",").map((x) => x.trim()).filter(Boolean);
+    return [];
+  };
+
+  // drag_drop: editor saves { text, distractors } -> component wants { words_correct_order: string[], hint_fr }
+  const normDragDrop = (sentences: any[]) =>
+    sentences.map((s) => ({
+      words_correct_order: Array.isArray(s.words_correct_order)
+        ? s.words_correct_order
+        : (s.text || s.correct_sentence || "").trim().split(/\s+/).filter(Boolean),
+      hint_fr: s.hint_fr ?? s.hint ?? undefined,
+      // distractors are stored but not consumed by the current component
+    }));
+
+  // click_paste: editor saves { text: "Ich [habe] ..." } -> component wants { text (no brackets), blank_word }
+  const normClickPaste = (sentences: any[]) =>
+    sentences.map((s) => {
+      if (s.blank_word) {
+        return { text: s.text || "", blank_word: s.blank_word };
+      }
+      const raw = s.text || "";
+      const match = raw.match(/\[([^\]]*)\]/);
+      const blank_word = match ? match[1] : "";
+      const text = raw.replace(/\[([^\]]*)\]/, blank_word);
+      return { text, blank_word };
+    });
+
+  // fill_gaps: editor saves { text, hint } -> component wants { template, hint }
+  const normFillGaps = (sentences: any[]) =>
+    sentences.map((s) => ({
+      template: s.template ?? s.text ?? "",
+      hint: s.hint ?? s.hint_fr ?? undefined,
+    }));
+
+  // qcm: editor saves { text, options: string[], correct: idx } ->
+  // component wants { question_fr, options: [{ text, is_correct }], explanation_fr }
+  const normQcm = (questions: any[]) =>
+    questions.map((q) => {
+      const opts = Array.isArray(q.options) ? q.options : [];
+      const alreadyShaped =
+        opts.length > 0 && typeof opts[0] === "object" && opts[0] !== null && "text" in opts[0];
+      return {
+        question_fr: q.question_fr ?? q.text ?? "",
+        question_de: q.question_de ?? undefined,
+        explanation_fr: q.explanation_fr ?? undefined,
+        options: alreadyShaped
+          ? opts
+          : opts.map((opt: string, i: number) => ({
+              text: opt,
+              is_correct: i === (typeof q.correct === "number" ? q.correct : -1),
+            })),
+      };
+    });
+
+  // qcm timer: editor saves `timer` / `timerSeconds`; component wants `timer_seconds`
+  const qcmTimer =
+    c.timer_seconds ?? (c.timer ? (typeof c.timer === "number" ? c.timer : c.timerSeconds) : undefined);
+
+  // speed_quiz: editor saves { text, correct, wrong: [] } ->
+  // component wants { question, correct_answer, wrong_answers: [] }
+  const normSpeedQuiz = (questions: any[]) =>
+    questions.map((q) => ({
+      question: q.question ?? q.text ?? "",
+      correct_answer: q.correct_answer ?? q.correct ?? "",
+      wrong_answers: Array.isArray(q.wrong_answers)
+        ? q.wrong_answers
+        : toList(q.wrong),
+    }));
+
+  // word_search: editor saves words as [{ word }] and `gridSize`; component wants string[] and `grid_size`
+  const normWords = (words: any[]) =>
+    words
+      .map((w) => (typeof w === "string" ? w : w?.word ?? ""))
+      .filter((w) => w && String(w).trim().length > 0);
+
+  // memory: editor saves { front, back } -> component wants { card_a, card_b }
+  const normMemory = (pairs: any[]) =>
+    pairs.map((p) => ({
+      card_a: p.card_a ?? p.front ?? "",
+      card_b: p.card_b ?? p.back ?? "",
+    }));
+
+  // match_picture: editor saves { imageUrl, word } -> component wants { image_url, word }
+  const normMatchPicture = (pairs: any[]) =>
+    pairs.map((p) => ({
+      image_url: p.image_url ?? p.imageUrl ?? "",
+      word: p.word ?? "",
+    }));
+
   try {
     switch (block.type) {
-      case "drag_drop":
-        return safe(c.sentences).length > 0
-          ? <DragDropExercise sentences={safe(c.sentences)} instruction_fr={inst} onComplete={onComplete} />
+      case "drag_drop": {
+        const sentences = normDragDrop(safe(c.sentences));
+        return sentences.length > 0
+          ? <DragDropExercise sentences={sentences} instruction_fr={inst} onComplete={onComplete} />
           : <ExercisePlaceholder block={block} onComplete={onComplete} />;
-      case "qcm":
-        return safe(c.questions).length > 0
-          ? <QcmExercise questions={safe(c.questions)} instruction_fr={inst} timer_seconds={c.timer_seconds} onComplete={onComplete} />
+      }
+      case "qcm": {
+        const questions = normQcm(safe(c.questions));
+        return questions.length > 0
+          ? <QcmExercise questions={questions} instruction_fr={inst} timer_seconds={qcmTimer} onComplete={onComplete} />
           : <ExercisePlaceholder block={block} onComplete={onComplete} />;
-      case "click_paste":
-        return safe(c.sentences).length > 0
-          ? <ClickPasteExercise sentences={safe(c.sentences)} instruction_fr={inst} onComplete={onComplete} />
+      }
+      case "click_paste": {
+        const sentences = normClickPaste(safe(c.sentences));
+        return sentences.length > 0
+          ? <ClickPasteExercise sentences={sentences} instruction_fr={inst} onComplete={onComplete} />
           : <ExercisePlaceholder block={block} onComplete={onComplete} />;
-      case "fill_gaps":
-        return safe(c.sentences).length > 0
-          ? <FillGapsExercise sentences={safe(c.sentences)} instruction_fr={inst} onComplete={onComplete} />
+      }
+      case "fill_gaps": {
+        const sentences = normFillGaps(safe(c.sentences));
+        return sentences.length > 0
+          ? <FillGapsExercise sentences={sentences} instruction_fr={inst} onComplete={onComplete} />
           : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      }
       case "categorize":
         return safe(c.categories).length > 0
           ? <CategorizeExercise categories={safe(c.categories)} items={safe(c.items)} instruction_fr={inst} onComplete={onComplete} />
@@ -248,14 +359,18 @@ function ExerciseBlock({ block, onComplete }: { block: LessonBlock; onComplete: 
         return safe(c.words).length > 0
           ? <HangmanExercise words={safe(c.words)} instruction_fr={inst} onComplete={onComplete} />
           : <ExercisePlaceholder block={block} onComplete={onComplete} />;
-      case "match_picture":
-        return safe(c.pairs).length > 0
-          ? <MatchPictureExercise pairs={safe(c.pairs)} instruction_fr={inst} onComplete={onComplete} />
+      case "match_picture": {
+        const pairs = normMatchPicture(safe(c.pairs));
+        return pairs.length > 0
+          ? <MatchPictureExercise pairs={pairs} instruction_fr={inst} onComplete={onComplete} />
           : <ExercisePlaceholder block={block} onComplete={onComplete} />;
-      case "memory":
-        return safe(c.pairs).length > 0
-          ? <MemoryExercise pairs={safe(c.pairs)} instruction_fr={inst} onComplete={onComplete} />
+      }
+      case "memory": {
+        const pairs = normMemory(safe(c.pairs));
+        return pairs.length > 0
+          ? <MemoryExercise pairs={pairs} instruction_fr={inst} onComplete={onComplete} />
           : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      }
       case "flashcard":
         return safe(c.cards).length > 0
           ? <FlashcardExercise cards={safe(c.cards)} instruction_fr={inst} onComplete={onComplete} />
@@ -264,14 +379,20 @@ function ExerciseBlock({ block, onComplete }: { block: LessonBlock; onComplete: 
         return safe(c.sentences).length > 0
           ? <SentenceBuilderExercise sentences={safe(c.sentences)} instruction_fr={inst} onComplete={onComplete} />
           : <ExercisePlaceholder block={block} onComplete={onComplete} />;
-      case "speed_quiz":
-        return safe(c.questions).length > 0
-          ? <SpeedQuizExercise questions={safe(c.questions)} seconds_per_question={c.seconds_per_question || 10} instruction_fr={inst} onComplete={onComplete} />
+      case "speed_quiz": {
+        const questions = normSpeedQuiz(safe(c.questions));
+        const spq = c.seconds_per_question ?? c.secondsPerQuestion ?? 10;
+        return questions.length > 0
+          ? <SpeedQuizExercise questions={questions} seconds_per_question={spq} instruction_fr={inst} onComplete={onComplete} />
           : <ExercisePlaceholder block={block} onComplete={onComplete} />;
-      case "word_search":
-        return safe(c.words).length > 0
-          ? <WordSearchExercise words={safe(c.words)} grid_size={c.grid_size || 10} instruction_fr={inst} onComplete={onComplete} />
+      }
+      case "word_search": {
+        const words = normWords(safe(c.words));
+        const gridSize = c.grid_size ?? c.gridSize ?? 10;
+        return words.length > 0
+          ? <WordSearchExercise words={words} grid_size={gridSize} instruction_fr={inst} onComplete={onComplete} />
           : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      }
       case "crossword":
         return safe(c.entries).length > 0
           ? <CrosswordExercise entries={safe(c.entries)} instruction_fr={inst} onComplete={onComplete} />
