@@ -1,6 +1,23 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Confetti } from "./Confetti";
 
+// Dynamic imports for exercise components
+import DragDropExercise from "./exercises/DragDropExercise";
+import QcmExercise from "./exercises/QcmExercise";
+import ClickPasteExercise from "./exercises/ClickPasteExercise";
+import FillGapsExercise from "./exercises/FillGapsExercise";
+import CategorizeExercise from "./exercises/CategorizeExercise";
+import MatchArrowsExercise from "./exercises/MatchArrowsExercise";
+import HangmanExercise from "./exercises/HangmanExercise";
+import MatchPictureExercise from "./exercises/MatchPictureExercise";
+import MemoryExercise from "./exercises/MemoryExercise";
+import FlashcardExercise from "./exercises/FlashcardExercise";
+import SentenceBuilderExercise from "./exercises/SentenceBuilderExercise";
+import SpeedQuizExercise from "./exercises/SpeedQuizExercise";
+import WordSearchExercise from "./exercises/WordSearchExercise";
+import CrosswordExercise from "./exercises/CrosswordExercise";
+import SpellingBeeExercise from "./exercises/SpellingBeeExercise";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -192,7 +209,48 @@ function MediaBlock({ block }: { block: LessonBlock }) {
 }
 
 // ---------------------------------------------------------------------------
-// ExercisePlaceholder — swapped out when real renderers are wired in
+// ExerciseBlock — renders the real exercise component based on block type
+function ExerciseBlock({ block, onComplete }: { block: LessonBlock; onComplete: (score: number) => void }) {
+  const c = block.content as any;
+  const inst = c?.instruction_fr || c?.instruction || "";
+
+  switch (block.type) {
+    case "drag_drop":
+      return <DragDropExercise sentences={c?.sentences || []} instruction_fr={inst} onComplete={onComplete} />;
+    case "qcm":
+      return <QcmExercise questions={c?.questions || []} instruction_fr={inst} timer_seconds={c?.timer_seconds} onComplete={onComplete} />;
+    case "click_paste":
+      return <ClickPasteExercise sentences={c?.sentences || []} instruction_fr={inst} onComplete={onComplete} />;
+    case "fill_gaps":
+      return <FillGapsExercise sentences={c?.sentences || []} instruction_fr={inst} onComplete={onComplete} />;
+    case "categorize":
+      return <CategorizeExercise categories={c?.categories || []} items={c?.items || []} instruction_fr={inst} onComplete={onComplete} />;
+    case "match_arrows":
+      return <MatchArrowsExercise pairs={c?.pairs || []} instruction_fr={inst} onComplete={onComplete} />;
+    case "hangman":
+      return <HangmanExercise words={c?.words || []} instruction_fr={inst} onComplete={onComplete} />;
+    case "match_picture":
+      return <MatchPictureExercise pairs={c?.pairs || []} instruction_fr={inst} onComplete={onComplete} />;
+    case "memory":
+      return <MemoryExercise pairs={c?.pairs || []} instruction_fr={inst} onComplete={onComplete} />;
+    case "flashcard":
+      return <FlashcardExercise cards={c?.cards || []} instruction_fr={inst} onComplete={onComplete} />;
+    case "sentence_builder":
+      return <SentenceBuilderExercise sentences={c?.sentences || []} instruction_fr={inst} onComplete={onComplete} />;
+    case "speed_quiz":
+      return <SpeedQuizExercise questions={c?.questions || []} seconds_per_question={c?.seconds_per_question || 10} instruction_fr={inst} onComplete={onComplete} />;
+    case "word_search":
+      return <WordSearchExercise words={c?.words || []} grid_size={c?.grid_size || 10} instruction_fr={inst} onComplete={onComplete} />;
+    case "crossword":
+      return <CrosswordExercise entries={c?.entries || []} instruction_fr={inst} onComplete={onComplete} />;
+    case "spelling_bee":
+      return <SpellingBeeExercise words={c?.words || []} instruction_fr={inst} onComplete={onComplete} />;
+    default:
+      return <ExercisePlaceholder block={block} onComplete={onComplete} />;
+  }
+}
+
+// ExercisePlaceholder — fallback for unknown types
 // ---------------------------------------------------------------------------
 
 function ExercisePlaceholder({
@@ -859,7 +917,7 @@ export function LessonPlayer({ lessonTitle, blocks, onComplete, onExit }: Lesson
           MEDIA_TYPES.includes(currentBlock.type) ? (
             <MediaBlock block={currentBlock} />
           ) : (
-            <ExercisePlaceholder block={currentBlock} onComplete={handleBlockComplete} />
+            <ExerciseBlock block={currentBlock} onComplete={handleBlockComplete} />
           )
         ) : (
           <div style={{ color: GRAY, marginTop: "32px" }}>Aucun bloc disponible.</div>
