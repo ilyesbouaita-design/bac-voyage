@@ -8,6 +8,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import BlockPicker from "@/components/learning/BlockPicker";
 import { BlockEditor } from "@/components/learning/BlockEditor";
 import { BLOCK_TYPES, type ContentBlockType } from "@/lib/learning-types";
+import { LessonPlayer } from "@/components/learning/LessonPlayer";
 
 export const Route = createFileRoute("/admin/grammatik-units")({
   component: AdminGrammatikUnits,
@@ -316,9 +317,10 @@ interface LessonCardProps {
   onPublishToggle: (lesson: Lesson) => void;
   onDelete: (id: string) => void;
   onBlocksChanged: (lessonId: string, blocks: LessonBlock[]) => void;
+  onPreview: (lesson: Lesson) => void;
 }
 
-function LessonCard({ lesson, index, locale, onPublishToggle, onDelete, onBlocksChanged }: LessonCardProps) {
+function LessonCard({ lesson, index, locale, onPublishToggle, onDelete, onBlocksChanged, onPreview }: LessonCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -399,6 +401,18 @@ function LessonCard({ lesson, index, locale, onPublishToggle, onDelete, onBlocks
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+          <button
+            onClick={() => onPreview(lesson)}
+            style={{
+              ...TM, padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 11,
+              background: "#f0f9ff",
+              color: "#0369a1",
+              border: "none",
+            }}
+            title="Tester cette leçon avant publication"
+          >
+            ▶ Aperçu
+          </button>
           <button
             onClick={() => setExpanded(!expanded)}
             style={{
@@ -513,6 +527,7 @@ function LessonManager({ unit, locale }: LessonManagerProps) {
   const [newTitleFr, setNewTitleFr] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [previewLesson, setPreviewLesson] = useState<Lesson | null>(null);
 
   useEffect(() => {
     fetchLessons();
@@ -564,6 +579,54 @@ function LessonManager({ unit, locale }: LessonManagerProps) {
     );
   }
 
+  // Fullscreen preview overlay
+  if (previewLesson) {
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "#fff", display: "flex", flexDirection: "column" }}>
+        {/* Banner */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "10px 20px",
+          background: "#fef3c7",
+          borderBottom: "2px solid #f59e0b",
+          fontFamily: "'Times New Roman', Times, serif",
+          fontSize: 12,
+        }}>
+          <span style={{ fontWeight: 700, color: "#92400e" }}>
+            Mode apercu — Vous testez cette leçon : <em>{previewLesson.title_fr}</em>
+          </span>
+          <button
+            onClick={() => setPreviewLesson(null)}
+            style={{
+              fontFamily: "'Times New Roman', Times, serif",
+              fontSize: 12,
+              background: "#92400e",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "5px 14px",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            Retour a l'edition
+          </button>
+        </div>
+        {/* Player */}
+        <div style={{ flex: 1, overflow: "auto" }}>
+          <LessonPlayer
+            lessonTitle={previewLesson.title_fr}
+            blocks={previewLesson.body_fr?.blocks ?? []}
+            onComplete={() => setPreviewLesson(null)}
+            onExit={() => setPreviewLesson(null)}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ marginTop: 12, padding: "14px 16px", background: "#f9fafb", borderRadius: 10, border: "1px solid #e5e7eb" }}>
       {/* Section header */}
@@ -591,6 +654,7 @@ function LessonManager({ unit, locale }: LessonManagerProps) {
               onPublishToggle={handlePublishToggle}
               onDelete={handleDeleteLesson}
               onBlocksChanged={handleBlocksChanged}
+              onPreview={setPreviewLesson}
             />
           ))}
         </div>
