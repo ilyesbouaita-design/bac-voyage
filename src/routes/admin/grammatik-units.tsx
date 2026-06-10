@@ -658,10 +658,8 @@ function AddUnitDialog({ onClose, onCreated, nextOrder }: AddUnitDialogProps) {
     const { error: insertError } = await supabase.from("grammar_topics").insert({
       title_fr: titleFr.trim(),
       title_ar: titleAr.trim() || null,
-      title_de: titleDe.trim() || null,
       description_fr: descFr.trim() || null,
-      color,
-      icon,
+      slug: titleFr.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
       is_published: false,
       order_index: nextOrder,
     });
