@@ -100,17 +100,30 @@ interface GrammarUnit {
   order_index: number;
 }
 
-interface Exercise {
+interface LessonBlock {
+  id: string;
+  type: string;
+  title_fr: string;
+  content: Record<string, unknown>;
+  points: number;
+  order_index: number;
+}
+
+interface Lesson {
   id: string;
   topic_id: string;
-  pillar: string;
-  type: string;
-  title_fr?: string;
-  content: Record<string, unknown>;
-  points?: number;
+  title_fr: string;
+  title_ar?: string | null;
+  body_fr: { blocks: LessonBlock[] } | null;
+  body_ar?: unknown | null;
   order_index: number;
   is_published: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
+
+// Rotating lesson border colours
+const LESSON_COLORS = ["#6C4CE0", "#0FB6A3", "#FFB200", "#FF5A5F"];
 
 // ---------------------------------------------------------------------------
 // Small shared components
@@ -156,16 +169,16 @@ function blockTypeColor(type: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Block row (inside the content editor)
+// Compact block row (inside an expanded lesson)
 // ---------------------------------------------------------------------------
 
-interface BlockRowProps {
-  block: Exercise;
+interface LessonBlockRowProps {
+  block: LessonBlock;
   index: number;
   onDelete: (id: string) => void;
 }
 
-function BlockRow({ block, index, onDelete }: BlockRowProps) {
+function LessonBlockRow({ block, index, onDelete }: LessonBlockRowProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const color = blockTypeColor(block.type);
 
@@ -173,55 +186,48 @@ function BlockRow({ block, index, onDelete }: BlockRowProps) {
     <div style={{
       display: "flex",
       alignItems: "center",
-      gap: 10,
-      padding: "8px 12px",
+      gap: 8,
+      padding: "6px 10px",
       background: "#fff",
       border: "1px solid #e5e7eb",
       borderLeft: `3px solid ${color}`,
-      borderRadius: 8,
-      marginBottom: 6,
+      borderRadius: 6,
+      marginBottom: 4,
     }}>
-      {/* Drag handle */}
-      <span style={{ color: "#9ca3af", cursor: "grab", fontSize: 14 }}>⠿</span>
-
-      {/* Order */}
       <span style={{ ...TM, color: "#9ca3af", minWidth: 18 }}>#{index + 1}</span>
 
-      {/* Type badge */}
       <span style={{
         ...TM,
         background: `${color}22`,
         color,
-        padding: "2px 7px",
+        padding: "1px 6px",
         borderRadius: 999,
         fontWeight: 600,
         whiteSpace: "nowrap",
+        fontSize: 11,
       }}>
         {blockTypeLabel(block.type)}
       </span>
 
-      {/* Title */}
       <span style={{ ...TM, flex: 1, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {block.title_fr || "(sans titre)"}
       </span>
 
-      {/* Points */}
-      {block.points != null && (
-        <span style={{ ...TM, color: "#6C4CE0", fontWeight: 600 }}>{block.points} pts</span>
+      {block.points > 0 && (
+        <span style={{ ...TM, color: "#6C4CE0", fontWeight: 600, fontSize: 11 }}>{block.points} pts</span>
       )}
 
-      {/* Delete */}
       {confirmDelete ? (
-        <span style={{ display: "flex", gap: 6 }}>
+        <span style={{ display: "flex", gap: 4 }}>
           <button
             onClick={() => onDelete(block.id)}
-            style={{ ...TM, background: "#FF5A5F", color: "#fff", border: "none", borderRadius: 5, padding: "3px 10px", cursor: "pointer" }}
+            style={{ ...TM, background: "#FF5A5F", color: "#fff", border: "none", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
           >
             Confirmer
           </button>
           <button
             onClick={() => setConfirmDelete(false)}
-            style={{ ...TM, background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 5, padding: "3px 10px", cursor: "pointer" }}
+            style={{ ...TM, background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontSize: 11 }}
           >
             Annuler
           </button>
@@ -229,8 +235,8 @@ function BlockRow({ block, index, onDelete }: BlockRowProps) {
       ) : (
         <button
           onClick={() => setConfirmDelete(true)}
-          style={{ ...TM, background: "none", border: "none", color: "#FF5A5F", cursor: "pointer", padding: "2px 6px" }}
-          title="Supprimer"
+          style={{ ...TM, background: "none", border: "none", color: "#FF5A5F", cursor: "pointer", padding: "1px 5px", fontSize: 12 }}
+          title="Supprimer ce bloc"
         >
           ✕
         </button>
@@ -240,68 +246,32 @@ function BlockRow({ block, index, onDelete }: BlockRowProps) {
 }
 
 // ---------------------------------------------------------------------------
-// New block form (shown after picking a type from BlockPicker)
+// New block form for lessons (appends to lesson.body_fr.blocks)
 // ---------------------------------------------------------------------------
 
-interface NewBlockFormProps {
-  topicId: string;
+interface NewLessonBlockFormProps {
   selectedType: ContentBlockType;
-  onSaved: () => void;
+  onSave: (block: Omit<LessonBlock, "id" | "order_index">) => void;
   onCancel: () => void;
 }
 
-function NewBlockForm({ topicId, selectedType, onSaved, onCancel }: NewBlockFormProps) {
+function NewLessonBlockForm({ selectedType, onSave, onCancel }: NewLessonBlockFormProps) {
   const [titleFr, setTitleFr] = useState("");
   const [points, setPoints] = useState(10);
   const [contentJson, setContentJson] = useState("{}");
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const color = blockTypeColor(selectedType);
 
-  async function handleSave() {
-    setSaving(true);
-    setError(null);
-
+  function handleSave() {
     let parsedContent: Record<string, unknown> = {};
     try {
       parsedContent = JSON.parse(contentJson);
     } catch {
       setError("JSON invalide. Vérifiez le contenu.");
-      setSaving(false);
       return;
     }
-
-    // Get max order_index
-    const { data: existing } = await supabase
-      .from("exercises")
-      .select("order_index")
-      .eq("topic_id", topicId)
-      .eq("pillar", "grammatik")
-      .order("order_index", { ascending: false })
-      .limit(1);
-
-    const nextOrder = (existing?.[0]?.order_index ?? 0) + 1;
-
-    const { error: insertError } = await supabase.from("exercises").insert({
-      topic_id: topicId,
-      pillar: "grammatik",
-      type: selectedType,
-      title_fr: titleFr || null,
-      content: parsedContent,
-      points,
-      order_index: nextOrder,
-      is_published: false,
-    });
-
-    if (insertError) {
-      setError(insertError.message);
-      setSaving(false);
-      return;
-    }
-
-    setSaving(false);
-    onSaved();
+    onSave({ type: selectedType, title_fr: titleFr, content: parsedContent, points });
   }
 
   return (
@@ -310,74 +280,61 @@ function NewBlockForm({ topicId, selectedType, onSaved, onCancel }: NewBlockForm
       border: `1px solid ${color}44`,
       borderLeft: `3px solid ${color}`,
       borderRadius: 8,
-      padding: 14,
+      padding: 12,
       marginTop: 8,
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ ...TM, background: `${color}22`, color, padding: "2px 8px", borderRadius: 999, fontWeight: 600 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span style={{ ...TM, background: `${color}22`, color, padding: "2px 7px", borderRadius: 999, fontWeight: 600, fontSize: 11 }}>
           {blockTypeLabel(selectedType)}
         </span>
         <span style={{ ...TM, color: "#6b7280" }}>Nouveau bloc</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, marginBottom: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: 8, marginBottom: 8 }}>
         <div>
-          <label style={{ ...TM, display: "block", color: "#374151", marginBottom: 4, fontWeight: 600 }}>
-            Titre (FR)
-          </label>
+          <label style={{ ...TM, display: "block", color: "#374151", marginBottom: 3, fontWeight: 600 }}>Titre (FR)</label>
           <input
             value={titleFr}
             onChange={(e) => setTitleFr(e.target.value)}
             placeholder="Titre du bloc..."
-            style={{ ...TM, width: "100%", padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, outline: "none", boxSizing: "border-box" }}
+            style={{ ...TM, width: "100%", padding: "5px 9px", border: "1px solid #d1d5db", borderRadius: 6, outline: "none", boxSizing: "border-box" }}
           />
         </div>
         <div>
-          <label style={{ ...TM, display: "block", color: "#374151", marginBottom: 4, fontWeight: 600 }}>
-            Points
-          </label>
+          <label style={{ ...TM, display: "block", color: "#374151", marginBottom: 3, fontWeight: 600 }}>Points</label>
           <input
             type="number"
             value={points}
             onChange={(e) => setPoints(Number(e.target.value))}
             min={0}
-            style={{ ...TM, width: 70, padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, outline: "none" }}
+            style={{ ...TM, width: "100%", padding: "5px 9px", border: "1px solid #d1d5db", borderRadius: 6, outline: "none", boxSizing: "border-box" }}
           />
         </div>
       </div>
 
-      <div style={{ marginBottom: 10 }}>
-        <label style={{ ...TM, display: "block", color: "#374151", marginBottom: 4, fontWeight: 600 }}>
-          Contenu JSON
-        </label>
+      <div style={{ marginBottom: 8 }}>
+        <label style={{ ...TM, display: "block", color: "#374151", marginBottom: 3, fontWeight: 600 }}>Contenu JSON</label>
         <textarea
           value={contentJson}
           onChange={(e) => setContentJson(e.target.value)}
-          rows={6}
+          rows={5}
           spellCheck={false}
-          style={{ ...TM, width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, outline: "none", resize: "vertical", fontFamily: "monospace", fontSize: 11, boxSizing: "border-box" }}
+          style={{ ...TM, width: "100%", padding: "6px 9px", border: "1px solid #d1d5db", borderRadius: 6, outline: "none", resize: "vertical", fontFamily: "monospace", fontSize: 11, boxSizing: "border-box" }}
         />
       </div>
 
-      {error && (
-        <p style={{ ...TM, color: "#FF5A5F", marginBottom: 8 }}>{error}</p>
-      )}
+      {error && <p style={{ ...TM, color: "#FF5A5F", marginBottom: 6 }}>{error}</p>}
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 6 }}>
         <button
           onClick={handleSave}
-          disabled={saving}
-          style={{
-            ...TM, background: "#6C4CE0", color: "#fff", border: "none",
-            borderRadius: 7, padding: "6px 16px", cursor: saving ? "not-allowed" : "pointer",
-            opacity: saving ? 0.7 : 1, fontWeight: 600,
-          }}
+          style={{ ...TM, background: "#6C4CE0", color: "#fff", border: "none", borderRadius: 6, padding: "5px 14px", cursor: "pointer", fontWeight: 600 }}
         >
-          {saving ? "Enregistrement…" : "Enregistrer le bloc"}
+          Enregistrer le bloc
         </button>
         <button
           onClick={onCancel}
-          style={{ ...TM, background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 7, padding: "6px 14px", cursor: "pointer" }}
+          style={{ ...TM, background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer" }}
         >
           Annuler
         </button>
@@ -387,93 +344,348 @@ function NewBlockForm({ topicId, selectedType, onSaved, onCancel }: NewBlockForm
 }
 
 // ---------------------------------------------------------------------------
-// Unit content editor (inline expansion)
+// Single lesson card (collapsible, shows its blocks)
 // ---------------------------------------------------------------------------
 
-interface UnitContentEditorProps {
+interface LessonCardProps {
+  lesson: Lesson;
+  index: number;
+  locale: "fr" | "ar";
+  onPublishToggle: (lesson: Lesson) => void;
+  onDelete: (id: string) => void;
+  onBlocksChanged: (lessonId: string, blocks: LessonBlock[]) => void;
+}
+
+function LessonCard({ lesson, index, locale, onPublishToggle, onDelete, onBlocksChanged }: LessonCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [pendingType, setPendingType] = useState<ContentBlockType | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const lessonColor = LESSON_COLORS[index % LESSON_COLORS.length];
+  const blocks: LessonBlock[] = lesson.body_fr?.blocks ?? [];
+
+  async function saveBlocks(newBlocks: LessonBlock[]) {
+    setSaving(true);
+    await supabase
+      .from("lessons")
+      .update({ body_fr: { blocks: newBlocks } })
+      .eq("id", lesson.id);
+    setSaving(false);
+    onBlocksChanged(lesson.id, newBlocks);
+  }
+
+  function handleDeleteBlock(blockId: string) {
+    const updated = blocks.filter((b) => b.id !== blockId);
+    saveBlocks(updated);
+  }
+
+  function handleAddBlock(partial: Omit<LessonBlock, "id" | "order_index">) {
+    const newBlock: LessonBlock = {
+      ...partial,
+      id: crypto.randomUUID(),
+      order_index: blocks.length,
+    };
+    const updated = [...blocks, newBlock];
+    saveBlocks(updated);
+    setPendingType(null);
+  }
+
+  return (
+    <div style={{
+      background: "#fff",
+      border: "1px solid #e5e7eb",
+      borderLeft: `4px solid ${lessonColor}`,
+      borderRadius: 8,
+      marginBottom: 8,
+      overflow: "hidden",
+    }}>
+      {/* Lesson header row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px" }}>
+        {/* Number badge */}
+        <span style={{
+          ...TM,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 22, height: 22, borderRadius: "50%",
+          background: `${lessonColor}22`, color: lessonColor, fontWeight: 700, fontSize: 11,
+          flexShrink: 0,
+        }}>
+          {index + 1}
+        </span>
+
+        {/* Title */}
+        <span style={{ ...TM, fontWeight: 700, color: "#111827", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {lesson.title_fr}
+        </span>
+
+        {/* Block count */}
+        <Badge color={lessonColor}>{blocks.length} bloc{blocks.length !== 1 ? "s" : ""}</Badge>
+
+        {/* Published badge */}
+        <span style={{
+          ...TM,
+          display: "inline-flex", alignItems: "center", gap: 4,
+          padding: "2px 7px", borderRadius: 999,
+          background: lesson.is_published ? "#dcfce7" : "#f3f4f6",
+          color: lesson.is_published ? "#16a34a" : "#6b7280",
+          fontWeight: 600, fontSize: 11,
+        }}>
+          <span style={{ width: 5, height: 5, borderRadius: "50%", background: lesson.is_published ? "#16a34a" : "#9ca3af", display: "inline-block" }} />
+          {lesson.is_published ? "Publié" : "Brouillon"}
+        </span>
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            style={{
+              ...TM, padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 11,
+              background: expanded ? lessonColor : `${lessonColor}22`,
+              color: expanded ? "#fff" : lessonColor,
+              border: "none",
+            }}
+          >
+            {expanded ? "Fermer" : "Modifier"}
+          </button>
+          <button
+            onClick={() => onPublishToggle(lesson)}
+            style={{
+              ...TM, padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 11,
+              background: lesson.is_published ? "#fef2f2" : "#dcfce7",
+              color: lesson.is_published ? "#dc2626" : "#16a34a",
+              border: "none",
+            }}
+          >
+            {lesson.is_published ? "Dépublier" : "Publier"}
+          </button>
+
+          {confirmDelete ? (
+            <>
+              <button
+                onClick={() => onDelete(lesson.id)}
+                style={{ ...TM, padding: "4px 10px", borderRadius: 6, cursor: "pointer", background: "#FF5A5F", color: "#fff", border: "none", fontWeight: 600, fontSize: 11 }}
+              >
+                Confirmer
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                style={{ ...TM, padding: "4px 10px", borderRadius: 6, cursor: "pointer", background: "#f3f4f6", color: "#374151", border: "none", fontSize: 11 }}
+              >
+                Annuler
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              style={{ ...TM, padding: "4px 10px", borderRadius: 6, cursor: "pointer", background: "#fef2f2", color: "#dc2626", border: "none", fontSize: 11 }}
+            >
+              Supprimer
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded: blocks */}
+      {expanded && (
+        <div style={{ padding: "0 14px 14px 14px", borderTop: "1px solid #f3f4f6" }}>
+          <div style={{ marginTop: 10 }}>
+            {blocks.length === 0 ? (
+              <p style={{ ...TM, color: "#9ca3af", marginBottom: 8 }}>Aucun bloc dans cette leçon.</p>
+            ) : (
+              blocks.map((block, bi) => (
+                <LessonBlockRow key={block.id} block={block} index={bi} onDelete={handleDeleteBlock} />
+              ))
+            )}
+          </div>
+
+          {pendingType && (
+            <NewLessonBlockForm
+              selectedType={pendingType}
+              onSave={handleAddBlock}
+              onCancel={() => setPendingType(null)}
+            />
+          )}
+
+          {!pendingType && (
+            <button
+              onClick={() => setShowPicker(true)}
+              style={{
+                ...TM, marginTop: 6, display: "inline-flex", alignItems: "center", gap: 5,
+                background: lessonColor, color: "#fff", border: "none",
+                borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontWeight: 600, fontSize: 11,
+              }}
+            >
+              <span style={{ fontSize: 13 }}>+</span> Ajouter un bloc
+            </button>
+          )}
+
+          {saving && <span style={{ ...TM, color: "#6b7280", marginLeft: 8, fontSize: 11 }}>Enregistrement…</span>}
+
+          {showPicker && (
+            <BlockPicker
+              locale={locale}
+              onSelect={(type) => { setShowPicker(false); setPendingType(type); }}
+              onClose={() => setShowPicker(false)}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Lesson manager — replaces the old UnitContentEditor
+// ---------------------------------------------------------------------------
+
+interface LessonManagerProps {
   unit: GrammarUnit;
   locale: "fr" | "ar";
 }
 
-function UnitContentEditor({ unit, locale }: UnitContentEditorProps) {
-  const [blocks, setBlocks] = useState<Exercise[]>([]);
+function LessonManager({ unit, locale }: LessonManagerProps) {
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showPicker, setShowPicker] = useState(false);
-  const [pendingType, setPendingType] = useState<ContentBlockType | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newTitleFr, setNewTitleFr] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchBlocks();
+    fetchLessons();
   }, [unit.id]);
 
-  async function fetchBlocks() {
+  async function fetchLessons() {
     setLoading(true);
     const { data, error } = await supabase
-      .from("exercises")
+      .from("lessons")
       .select("*")
       .eq("topic_id", unit.id)
-      .eq("pillar", "grammatik")
       .order("order_index", { ascending: true });
-
-    if (!error && data) setBlocks(data as Exercise[]);
+    if (!error && data) setLessons(data as Lesson[]);
     setLoading(false);
   }
 
-  async function handleDeleteBlock(id: string) {
-    await supabase.from("exercises").delete().eq("id", id);
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
+  async function handleCreateLesson() {
+    if (!newTitleFr.trim()) { setCreateError("Le titre est requis."); return; }
+    setCreating(true);
+    setCreateError(null);
+    const nextOrder = lessons.length > 0 ? Math.max(...lessons.map((l) => l.order_index)) + 1 : 0;
+    const { error } = await supabase.from("lessons").insert({
+      topic_id: unit.id,
+      title_fr: newTitleFr.trim(),
+      order_index: nextOrder,
+      is_published: false,
+      body_fr: { blocks: [] },
+    });
+    if (error) { setCreateError(error.message); setCreating(false); return; }
+    setNewTitleFr("");
+    setShowAddForm(false);
+    setCreating(false);
+    fetchLessons();
   }
 
-  function handlePickerSelect(type: ContentBlockType) {
-    setShowPicker(false);
-    setPendingType(type);
+  async function handlePublishToggle(lesson: Lesson) {
+    await supabase.from("lessons").update({ is_published: !lesson.is_published }).eq("id", lesson.id);
+    setLessons((prev) => prev.map((l) => l.id === lesson.id ? { ...l, is_published: !l.is_published } : l));
+  }
+
+  async function handleDeleteLesson(id: string) {
+    await supabase.from("lessons").delete().eq("id", id);
+    setLessons((prev) => prev.filter((l) => l.id !== id));
+  }
+
+  function handleBlocksChanged(lessonId: string, blocks: LessonBlock[]) {
+    setLessons((prev) =>
+      prev.map((l) => l.id === lessonId ? { ...l, body_fr: { blocks } } : l)
+    );
   }
 
   return (
     <div style={{ marginTop: 12, padding: "14px 16px", background: "#f9fafb", borderRadius: 10, border: "1px solid #e5e7eb" }}>
-      <p style={{ ...TM, fontWeight: 700, color: "#374151", marginBottom: 10 }}>
-        Blocs de contenu — {unit.title_fr}
-      </p>
+      {/* Section header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <p style={{ ...TM, fontWeight: 700, color: "#374151", margin: 0 }}>
+          Leçons — {unit.title_fr}
+        </p>
+        <span style={{ ...TM, color: "#6b7280", fontSize: 11 }}>
+          {lessons.length} leçon{lessons.length !== 1 ? "s" : ""}
+        </span>
+      </div>
 
       {loading ? (
         <Spinner />
-      ) : blocks.length === 0 ? (
-        <p style={{ ...TM, color: "#9ca3af", marginBottom: 10 }}>Aucun bloc pour l'instant.</p>
+      ) : lessons.length === 0 ? (
+        <p style={{ ...TM, color: "#9ca3af", marginBottom: 10 }}>Aucune leçon pour l'instant.</p>
       ) : (
         <div>
-          {blocks.map((block, i) => (
-            <BlockRow key={block.id} block={block} index={i} onDelete={handleDeleteBlock} />
+          {lessons.map((lesson, i) => (
+            <LessonCard
+              key={lesson.id}
+              lesson={lesson}
+              index={i}
+              locale={locale}
+              onPublishToggle={handlePublishToggle}
+              onDelete={handleDeleteLesson}
+              onBlocksChanged={handleBlocksChanged}
+            />
           ))}
         </div>
       )}
 
-      {pendingType && (
-        <NewBlockForm
-          topicId={unit.id}
-          selectedType={pendingType}
-          onSaved={() => { setPendingType(null); fetchBlocks(); }}
-          onCancel={() => setPendingType(null)}
-        />
-      )}
-
-      {!pendingType && (
+      {/* Add lesson inline form */}
+      {showAddForm ? (
+        <div style={{
+          marginTop: 10,
+          background: "#fff",
+          border: "1px solid #d1d5db",
+          borderRadius: 8,
+          padding: 12,
+        }}>
+          <label style={{ ...TM, display: "block", fontWeight: 600, color: "#374151", marginBottom: 4 }}>
+            Titre de la leçon (FR)
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              value={newTitleFr}
+              onChange={(e) => setNewTitleFr(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleCreateLesson(); }}
+              placeholder="ex. Introduction aux verbes..."
+              autoFocus
+              style={{ ...TM, flex: 1, padding: "6px 10px", border: "1px solid #d1d5db", borderRadius: 6, outline: "none" }}
+            />
+            <button
+              onClick={handleCreateLesson}
+              disabled={creating}
+              style={{
+                ...TM, background: "#6C4CE0", color: "#fff", border: "none",
+                borderRadius: 6, padding: "6px 14px", cursor: creating ? "not-allowed" : "pointer",
+                opacity: creating ? 0.7 : 1, fontWeight: 600,
+              }}
+            >
+              {creating ? "Création…" : "Créer"}
+            </button>
+            <button
+              onClick={() => { setShowAddForm(false); setNewTitleFr(""); setCreateError(null); }}
+              style={{ ...TM, background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer" }}
+            >
+              Annuler
+            </button>
+          </div>
+          {createError && <p style={{ ...TM, color: "#FF5A5F", marginTop: 6 }}>{createError}</p>}
+        </div>
+      ) : (
         <button
-          onClick={() => setShowPicker(true)}
+          onClick={() => setShowAddForm(true)}
           style={{
-            ...TM, marginTop: 8, display: "inline-flex", alignItems: "center", gap: 6,
+            ...TM, marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6,
             background: "#6C4CE0", color: "#fff", border: "none",
             borderRadius: 7, padding: "6px 14px", cursor: "pointer", fontWeight: 600,
           }}
         >
-          <span style={{ fontSize: 14 }}>+</span> Ajouter un bloc
+          <span style={{ fontSize: 14 }}>+</span> Ajouter une leçon
         </button>
-      )}
-
-      {showPicker && (
-        <BlockPicker
-          locale={locale}
-          onSelect={handlePickerSelect}
-          onClose={() => setShowPicker(false)}
-        />
       )}
     </div>
   );
@@ -485,14 +697,14 @@ function UnitContentEditor({ unit, locale }: UnitContentEditorProps) {
 
 interface UnitCardProps {
   unit: GrammarUnit;
-  exerciseCount: number;
+  lessonCount: number;
   locale: "fr" | "ar";
   onPublishToggle: (unit: GrammarUnit) => void;
   onDelete: (id: string) => void;
   onEdit: (unit: GrammarUnit) => void;
 }
 
-function UnitCard({ unit, exerciseCount, locale, onPublishToggle, onDelete, onEdit }: UnitCardProps) {
+function UnitCard({ unit, lessonCount, locale, onPublishToggle, onDelete, onEdit }: UnitCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const color = unit.color ?? "#6C4CE0";
@@ -555,7 +767,7 @@ function UnitCard({ unit, exerciseCount, locale, onPublishToggle, onDelete, onEd
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
             <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, display: "inline-block" }} />
-            <Badge color={color}>{exerciseCount} exercice{exerciseCount !== 1 ? "s" : ""}</Badge>
+            <Badge color={color}>{lessonCount} leçon{lessonCount !== 1 ? "s" : ""}</Badge>
           </div>
         </div>
 
@@ -622,7 +834,7 @@ function UnitCard({ unit, exerciseCount, locale, onPublishToggle, onDelete, onEd
 
       {expanded && (
         <div style={{ padding: "0 16px 16px" }}>
-          <UnitContentEditor unit={unit} locale={locale} />
+          <LessonManager unit={unit} locale={locale} />
         </div>
       )}
     </div>
@@ -906,7 +1118,7 @@ function AdminGrammatikUnits() {
   const t = getT(locale);
 
   const [units, setUnits] = useState<GrammarUnit[]>([]);
-  const [exerciseCounts, setExerciseCounts] = useState<Record<string, number>>({});
+  const [lessonCounts, setLessonCounts] = useState<Record<string, number>>({});
   const [dataLoading, setDataLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingUnit, setEditingUnit] = useState<GrammarUnit | null>(null);
@@ -928,19 +1140,18 @@ function AdminGrammatikUnits() {
       const fetchedUnits = data as GrammarUnit[];
       setUnits(fetchedUnits);
 
-      // Fetch exercise counts per unit
+      // Fetch lesson counts per unit
       const counts: Record<string, number> = {};
       await Promise.all(
         fetchedUnits.map(async (u) => {
           const { count } = await supabase
-            .from("exercises")
+            .from("lessons")
             .select("*", { count: "exact", head: true })
-            .eq("topic_id", u.id)
-            .eq("pillar", "grammatik");
+            .eq("topic_id", u.id);
           counts[u.id] = count ?? 0;
         })
       );
-      setExerciseCounts(counts);
+      setLessonCounts(counts);
     }
 
     setDataLoading(false);
@@ -1005,7 +1216,7 @@ function AdminGrammatikUnits() {
               <UnitCard
                 key={unit.id}
                 unit={unit}
-                exerciseCount={exerciseCounts[unit.id] ?? 0}
+                lessonCount={lessonCounts[unit.id] ?? 0}
                 locale={locale as "fr" | "ar"}
                 onPublishToggle={handlePublishToggle}
                 onDelete={handleDelete}
