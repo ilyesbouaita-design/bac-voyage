@@ -210,43 +210,82 @@ function MediaBlock({ block }: { block: LessonBlock }) {
 
 // ---------------------------------------------------------------------------
 // ExerciseBlock — renders the real exercise component based on block type
+// Wraps in error boundary to prevent crashes from missing/malformed content
 function ExerciseBlock({ block, onComplete }: { block: LessonBlock; onComplete: (score: number) => void }) {
-  const c = block.content as any;
-  const inst = c?.instruction_fr || c?.instruction || "";
+  const c = (block.content && typeof block.content === "object") ? block.content as any : {};
+  const inst = c.instruction_fr || c.instruction || block.title_fr || "";
 
-  switch (block.type) {
-    case "drag_drop":
-      return <DragDropExercise sentences={c?.sentences || []} instruction_fr={inst} onComplete={onComplete} />;
-    case "qcm":
-      return <QcmExercise questions={c?.questions || []} instruction_fr={inst} timer_seconds={c?.timer_seconds} onComplete={onComplete} />;
-    case "click_paste":
-      return <ClickPasteExercise sentences={c?.sentences || []} instruction_fr={inst} onComplete={onComplete} />;
-    case "fill_gaps":
-      return <FillGapsExercise sentences={c?.sentences || []} instruction_fr={inst} onComplete={onComplete} />;
-    case "categorize":
-      return <CategorizeExercise categories={c?.categories || []} items={c?.items || []} instruction_fr={inst} onComplete={onComplete} />;
-    case "match_arrows":
-      return <MatchArrowsExercise pairs={c?.pairs || []} instruction_fr={inst} onComplete={onComplete} />;
-    case "hangman":
-      return <HangmanExercise words={c?.words || []} instruction_fr={inst} onComplete={onComplete} />;
-    case "match_picture":
-      return <MatchPictureExercise pairs={c?.pairs || []} instruction_fr={inst} onComplete={onComplete} />;
-    case "memory":
-      return <MemoryExercise pairs={c?.pairs || []} instruction_fr={inst} onComplete={onComplete} />;
-    case "flashcard":
-      return <FlashcardExercise cards={c?.cards || []} instruction_fr={inst} onComplete={onComplete} />;
-    case "sentence_builder":
-      return <SentenceBuilderExercise sentences={c?.sentences || []} instruction_fr={inst} onComplete={onComplete} />;
-    case "speed_quiz":
-      return <SpeedQuizExercise questions={c?.questions || []} seconds_per_question={c?.seconds_per_question || 10} instruction_fr={inst} onComplete={onComplete} />;
-    case "word_search":
-      return <WordSearchExercise words={c?.words || []} grid_size={c?.grid_size || 10} instruction_fr={inst} onComplete={onComplete} />;
-    case "crossword":
-      return <CrosswordExercise entries={c?.entries || []} instruction_fr={inst} onComplete={onComplete} />;
-    case "spelling_bee":
-      return <SpellingBeeExercise words={c?.words || []} instruction_fr={inst} onComplete={onComplete} />;
-    default:
-      return <ExercisePlaceholder block={block} onComplete={onComplete} />;
+  // Ensure arrays exist — prevent .map() on undefined
+  const safe = (arr: any) => (Array.isArray(arr) ? arr : []);
+
+  try {
+    switch (block.type) {
+      case "drag_drop":
+        return safe(c.sentences).length > 0
+          ? <DragDropExercise sentences={safe(c.sentences)} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "qcm":
+        return safe(c.questions).length > 0
+          ? <QcmExercise questions={safe(c.questions)} instruction_fr={inst} timer_seconds={c.timer_seconds} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "click_paste":
+        return safe(c.sentences).length > 0
+          ? <ClickPasteExercise sentences={safe(c.sentences)} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "fill_gaps":
+        return safe(c.sentences).length > 0
+          ? <FillGapsExercise sentences={safe(c.sentences)} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "categorize":
+        return safe(c.categories).length > 0
+          ? <CategorizeExercise categories={safe(c.categories)} items={safe(c.items)} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "match_arrows":
+        return safe(c.pairs).length > 0
+          ? <MatchArrowsExercise pairs={safe(c.pairs)} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "hangman":
+        return safe(c.words).length > 0
+          ? <HangmanExercise words={safe(c.words)} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "match_picture":
+        return safe(c.pairs).length > 0
+          ? <MatchPictureExercise pairs={safe(c.pairs)} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "memory":
+        return safe(c.pairs).length > 0
+          ? <MemoryExercise pairs={safe(c.pairs)} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "flashcard":
+        return safe(c.cards).length > 0
+          ? <FlashcardExercise cards={safe(c.cards)} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "sentence_builder":
+        return safe(c.sentences).length > 0
+          ? <SentenceBuilderExercise sentences={safe(c.sentences)} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "speed_quiz":
+        return safe(c.questions).length > 0
+          ? <SpeedQuizExercise questions={safe(c.questions)} seconds_per_question={c.seconds_per_question || 10} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "word_search":
+        return safe(c.words).length > 0
+          ? <WordSearchExercise words={safe(c.words)} grid_size={c.grid_size || 10} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "crossword":
+        return safe(c.entries).length > 0
+          ? <CrosswordExercise entries={safe(c.entries)} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      case "spelling_bee":
+        return safe(c.words).length > 0
+          ? <SpellingBeeExercise words={safe(c.words)} instruction_fr={inst} onComplete={onComplete} />
+          : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      default:
+        return <ExercisePlaceholder block={block} onComplete={onComplete} />;
+    }
+  } catch (err) {
+    console.error("ExerciseBlock render error:", err, block);
+    return <ExercisePlaceholder block={block} onComplete={onComplete} />;
   }
 }
 
