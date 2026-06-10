@@ -345,7 +345,7 @@ function UnitDetail({ topicId, studentId, locale, onBack, onPlayLesson }: UnitDe
       setLoading(true);
 
       const [topicRes, lessonsRes] = await Promise.all([
-        supabase.from("grammar_topics").select("id, title_fr, title_ar, icon, color").eq("id", topicId).single(),
+        supabase.from("grammar_topics").select("id, title_fr, title_ar, description_fr, slug").eq("id", topicId).single(),
         supabase
           .from("lessons")
           .select("*")
@@ -590,7 +590,7 @@ function GrammatikPage() {
 
       const { data: topicsData, error } = await supabase
         .from("grammar_topics")
-        .select("id, title_fr, title_ar, description_fr, description_ar, icon, color, cefr_level, order_index, is_published")
+        .select("id, title_fr, title_ar, description_fr, description_ar, cefr_level, order_index, is_published, slug")
         .eq("is_published", true)
         .order("order_index", { ascending: true });
 
