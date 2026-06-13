@@ -98,6 +98,7 @@ interface GrammarUnit {
   description_fr?: string;
   color?: string;
   icon?: string;
+  slug?: string;
   is_published: boolean;
   order_index: number;
 }
@@ -1163,7 +1164,10 @@ function AdminGrammatikUnits() {
       .order("order_index", { ascending: true });
 
     if (!error && data) {
-      const fetchedUnits = data as GrammarUnit[];
+      // Exclude Wortschatz anchor topics (slug starts with "ws-")
+      const fetchedUnits = (data as GrammarUnit[]).filter(
+        (u) => !(u.slug && u.slug.startsWith("ws-"))
+      );
       setUnits(fetchedUnits);
 
       // Fetch lesson counts per unit

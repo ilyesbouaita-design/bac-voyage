@@ -602,9 +602,14 @@ function GrammatikPage() {
         return;
       }
 
+      // Exclude Wortschatz anchor topics (slug starts with "ws-")
+      const grammarTopics = topicsData.filter(
+        (t: any) => !(t.slug && t.slug.startsWith("ws-"))
+      );
+
       // For each topic, count published lessons
       const enriched = await Promise.all(
-        topicsData.map(async (topic) => {
+        grammarTopics.map(async (topic) => {
           const { count } = await supabase
             .from("lessons")
             .select("id", { count: "exact", head: true })
