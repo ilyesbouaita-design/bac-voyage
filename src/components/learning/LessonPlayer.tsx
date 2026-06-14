@@ -307,6 +307,14 @@ function ExerciseBlock({ block, onComplete }: { block: LessonBlock; onComplete: 
       .map((w) => (typeof w === "string" ? w : w?.word ?? ""))
       .filter((w) => w && String(w).trim().length > 0);
 
+  // spelling_bee: editor saves { word, hint, audioUrl } -> component wants { word, hint_fr, audio_url }
+  const normSpellingBee = (words: any[]) =>
+    words.map((w) => ({
+      word: w.word ?? "",
+      hint_fr: w.hint_fr ?? w.hint ?? undefined,
+      audio_url: w.audio_url ?? w.audioUrl ?? undefined,
+    }));
+
   // memory: editor saves { front, back } -> component wants { card_a, card_b }
   const normMemory = (pairs: any[]) =>
     pairs.map((p) => ({
@@ -397,10 +405,12 @@ function ExerciseBlock({ block, onComplete }: { block: LessonBlock; onComplete: 
         return safe(c.entries).length > 0
           ? <CrosswordExercise entries={safe(c.entries)} instruction_fr={inst} onComplete={onComplete} />
           : <ExercisePlaceholder block={block} onComplete={onComplete} />;
-      case "spelling_bee":
-        return safe(c.words).length > 0
-          ? <SpellingBeeExercise words={safe(c.words)} instruction_fr={inst} onComplete={onComplete} />
+      case "spelling_bee": {
+        const beeWords = normSpellingBee(safe(c.words));
+        return beeWords.length > 0
+          ? <SpellingBeeExercise words={beeWords} instruction_fr={inst} onComplete={onComplete} />
           : <ExercisePlaceholder block={block} onComplete={onComplete} />;
+      }
       default:
         return <ExercisePlaceholder block={block} onComplete={onComplete} />;
     }

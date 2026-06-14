@@ -70,7 +70,20 @@ export function useAuth(requiredRole?: UserRole): AuthState {
     async function load() {
       // Check demo mode first
       const demoUser = getDemoUser();
-      if (demoUser) {
+
+      // Real Supabase auth
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      // If a real session exists, clear any lingering demo flags so they don't
+      // shadow the authenticated user on subsequent loads.
+      if (session && demoUser) {
+        localStorage.removeItem("demo-mode");
+        localStorage.removeItem("demo-user");
+      }
+
+      if (demoUser && !session) {
         if (!active) return;
         // Role-based redirect in demo mode
         if (requiredRole && demoUser.role !== requiredRole) {
@@ -80,11 +93,6 @@ export function useAuth(requiredRole?: UserRole): AuthState {
         setState(demoUser);
         return;
       }
-
-      // Real Supabase auth
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
 
       if (!session) {
         navigate({ to: "/login" });

@@ -1064,10 +1064,7 @@ function EditUnitDialog({ unit, onClose, onSaved }: EditUnitDialogProps) {
       .update({
         title_fr: titleFr.trim(),
         title_ar: titleAr.trim() || null,
-        title_de: titleDe.trim() || null,
         description_fr: descFr.trim() || null,
-        color,
-        icon,
       })
       .eq("id", unit.id);
 
