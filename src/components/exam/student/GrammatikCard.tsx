@@ -594,7 +594,7 @@ function DeklinationVariant({
               value={gapValues[gapIdx]}
               onChange={(e) => handleGapChange(gapIdx, e.target.value)}
               disabled={showResults}
-              placeholder={part.value || "…"}
+              placeholder="…"
               className={`rounded-md border px-1 py-0 text-[12px] outline-none transition mx-0.5 text-center disabled:cursor-default disabled:opacity-80 ${borderColor}`}
               style={{ ...FONT, width: 40, minWidth: 40 }}
             />
