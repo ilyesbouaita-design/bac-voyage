@@ -7,6 +7,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { supabase } from "@/lib/supabase";
 import { EINHEITEN, type Einheit } from "@/lib/einheiten";
 import { LessonPlayer } from "@/components/learning/LessonPlayer";
+import { awardXp } from "@/lib/xp-service";
 
 export const Route = createFileRoute("/dashboard/wortschatz")({
   component: WortschatzPage,
@@ -601,8 +602,18 @@ function WortschatzPage() {
       <LessonPlayer
         lessonTitle={playingLesson.title_fr}
         blocks={playingLesson.body_fr?.blocks ?? []}
-        onComplete={(results) => {
+        onComplete={async (results) => {
+          // Save to localStorage (keep for offline/fast check)
           saveLessonCompletion(auth.userId!, playingLesson.id, results);
+
+          // Persist to Supabase
+          await awardXp({
+            studentId: auth.userId!,
+            amount: results.totalXp,
+            source: "lesson",
+            refId: playingLesson.id,
+          });
+
           setPlayingLesson(null);
         }}
         onExit={() => setPlayingLesson(null)}
