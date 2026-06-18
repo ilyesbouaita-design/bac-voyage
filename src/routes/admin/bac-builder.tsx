@@ -1063,7 +1063,10 @@ function BacBuilderPage() {
             <h3 className="font-bold text-[12px] text-muted-foreground mt-3" style={tmr}>Wortschatz</h3>
             <AdminSynonymGegenteilEditor type="synonym" value={synonym} onChange={setSynonym as any} />
             <AdminSynonymGegenteilEditor type="gegenteil" value={gegenteil} onChange={setGegenteil as any} />
+            {/* Komposita (Kompositum bilden/lösen) */}
             <AdminWortbildungEditor value={wortbildung} onChange={setWortbildung} />
+            {/* Wortableitung (Bilden Sie aus diesem Adjektiv das passende Substantiv...) */}
+            <AdminWortbildungEditor value={wortableitung} onChange={(v) => setWortableitung(v as WortableitungContent)} />
             <AdminUebersetzungEditor value={uebersetzung} onChange={setUebersetzung} />
 
             <h3 className="font-bold text-[12px] text-muted-foreground mt-4" style={tmr}>Grammatik</h3>

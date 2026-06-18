@@ -114,32 +114,63 @@
 }
 
 /* ============================================================
-   GLOBAL BUTTON PRESS EFFECT
-   Every <button> and <a> with button-like classes gets a
-   satisfying "press" feel on click — scales down slightly.
+   GLOBAL BUTTON INTERACTIONS
+   Every clickable element gets hover lift + press effect.
    ============================================================ */
 
 button,
 [role="button"],
-a.btn,
-.btn {
-  /* Smooth transition for the press effect */
-  transition-property: transform, box-shadow, opacity;
-  transition-duration: 150ms;
+a,
+input[type="submit"],
+input[type="button"],
+label[for],
+select {
+  /* Smooth transition for ALL states */
+  transition-property: transform, box-shadow, opacity, background-color, border-color, color;
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Hover: lift up */
+button:not(:disabled):hover,
+[role="button"]:not([aria-disabled="true"]):hover,
+a:hover {
+  transform: translateY(-2px);
+}
+
+/* Active/click: press down with scale */
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active,
+a:active {
+  transform: scale(0.94) translateY(0px);
+  transition-duration: 80ms;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-button:active,
-[role="button"]:active,
-a.btn:active,
-.btn:active {
-  transform: scale(0.95);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+/* Disabled: no animation */
+button:disabled,
+button:disabled:hover,
+button:disabled:active,
+[role="button"][aria-disabled="true"],
+[role="button"][aria-disabled="true"]:hover,
+[role="button"][aria-disabled="true"]:active {
+  transform: none !important;
+  cursor: not-allowed;
 }
 
-/* Prevent press effect on disabled buttons */
-button:disabled:active,
-[role="button"][aria-disabled="true"]:active {
+/* Input/textarea: no lift/press (only focus ring) */
+input[type="text"]:hover,
+input[type="text"]:active,
+input[type="email"]:hover,
+input[type="email"]:active,
+input[type="password"]:hover,
+input[type="password"]:active,
+input[type="number"]:hover,
+input[type="number"]:active,
+textarea:hover,
+textarea:active,
+select:hover,
+select:active {
   transform: none;
 }
 
