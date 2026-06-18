@@ -541,21 +541,26 @@ function DeklinationVariant({
     [onAnswerChange]
   );
 
-  // Determine per-gap correctness when showing results
-  // Compare reconstructed answer
-  const reconstructed = useMemo(() => {
-    let gapIdx = 0;
-    return parts
-      .map((p) => {
-        if (p.type === "text") return p.value;
-        return gapValues[gapIdx++] ?? "";
-      })
-      .join("");
-  }, [parts, gapValues]);
+  // Per-gap correct answers extracted from the template (part.value = the answer for that gap)
+  const gapAnswers = useMemo(
+    () => parts.filter((p) => p.type === "gap").map((p) => p.value),
+    [parts]
+  );
 
-  const isCorrect =
-    result?.is_correct ??
-    normalize(reconstructed) === normalize(correct_answer);
+  // Per-gap correctness: case-insensitive trim comparison
+  const gapResults = useMemo(
+    () => gapAnswers.map((ans, i) =>
+      normalize(gapValues[i] ?? "") === normalize(ans)
+    ),
+    [gapAnswers, gapValues]
+  );
+
+  const correctCount = gapResults.filter(Boolean).length;
+  const totalGaps = gapAnswers.length || 4;
+  // Score: 0.25 per correct gap (total 1 pt for 4 gaps)
+  const perGapPoint = points / totalGaps;
+  const localScore = correctCount * perGapPoint;
+  const isCorrect = result?.is_correct ?? correctCount === totalGaps;
   const level = getLevel(result, isCorrect);
 
   let runningGapIdx = 0;
@@ -567,37 +572,47 @@ function DeklinationVariant({
           Deklination
         </span>
         <span className="text-[11px] text-muted-foreground tabular-nums">
-          {points} {points === 1 ? "Punkt" : "Punkte"}
+          {showResults
+            ? `${localScore.toFixed(2)} / ${points} Punkt${points !== 1 ? "e" : ""}`
+            : `${points} Punkt${points !== 1 ? "e" : ""}`}
         </span>
       </div>
       <p className="text-[12px] italic text-muted-foreground">
         Ergänzen Sie die fehlenden Endungen!
       </p>
 
-      {/* Inline template with gap inputs */}
+      {/* Inline template with per-gap color feedback */}
       <div className="rounded-xl border border-[#6C4CE0]/20 bg-[#6C4CE0]/5 px-4 py-3 text-[12px] leading-loose flex flex-wrap items-baseline gap-0">
         {parts.map((part, idx) => {
           if (part.type === "text") {
             return <span key={idx}>{part.value}</span>;
           }
           const gapIdx = runningGapIdx++;
+          // Per-gap color when showing results
           const borderColor = showResults
-            ? isCorrect
+            ? gapResults[gapIdx]
               ? "border-green-400 bg-green-50"
               : "border-[#FF5A5F] bg-[#FF5A5F]/5"
             : "border-[#6C4CE0]/40 bg-white/80 focus:border-[#6C4CE0] focus:ring-2 focus:ring-[#6C4CE0]/20";
 
           return (
-            <input
-              key={idx}
-              type="text"
-              value={gapValues[gapIdx]}
-              onChange={(e) => handleGapChange(gapIdx, e.target.value)}
-              disabled={showResults}
-              placeholder="…"
-              className={`rounded-md border px-1 py-0 text-[12px] outline-none transition mx-0.5 text-center disabled:cursor-default disabled:opacity-80 ${borderColor}`}
-              style={{ ...FONT, width: 40, minWidth: 40 }}
-            />
+            <span key={idx} className="relative inline-flex flex-col items-center mx-0.5">
+              <input
+                type="text"
+                value={gapValues[gapIdx]}
+                onChange={(e) => handleGapChange(gapIdx, e.target.value)}
+                disabled={showResults}
+                placeholder="…"
+                className={`rounded-md border px-1 py-0 text-[12px] outline-none transition text-center disabled:cursor-default disabled:opacity-80 ${borderColor}`}
+                style={{ ...FONT, width: 40, minWidth: 40 }}
+              />
+              {/* Show correct answer below wrong gap */}
+              {showResults && !gapResults[gapIdx] && (
+                <span className="text-[10px] text-green-600 font-semibold leading-tight">
+                  {gapAnswers[gapIdx]}
+                </span>
+              )}
+            </span>
           );
         })}
       </div>
