@@ -137,6 +137,7 @@ function StudentExamPage() {
 
   // Results
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false); // loading state
   const [results, setResults] = useState<Record<string, any>>({});
 
   // Timer
@@ -231,6 +232,7 @@ function StudentExamPage() {
   // Handle submit
   async function handleSubmit() {
     if (!userId || !exam) return;
+    setSubmitting(true);
 
     // Create attempt
     const { data: attempt } = await supabase
@@ -258,6 +260,9 @@ function StudentExamPage() {
       }
     }
 
+    // Show loading screen for 3 seconds before revealing results
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    setSubmitting(false);
     setSubmitted(true);
     // TODO: Trigger AI correction and load results
   }
@@ -777,18 +782,23 @@ function StudentExamPage() {
               ))}
 
               {/* Submit bar */}
-              {!submitted && (
+              {!submitted && !submitting && (
                 <div className="pt-6 pb-4">
                   <button
                     onClick={handleSubmit}
-                    className="w-full py-3 rounded-xl font-bold text-white shadow-lg transition hover:opacity-90"
+                    className="w-full py-3 rounded-xl font-bold text-white shadow-lg"
                     style={{
                       background: "linear-gradient(90deg, #FF5A5F, #6C4CE0)",
                       fontSize: "13px",
                       fontFamily: "'Times New Roman', Georgia, serif",
+                      transition: "transform 180ms cubic-bezier(0.34,1.56,0.64,1), box-shadow 180ms ease",
                     }}
+                    onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(108,76,224,0.35)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; }}
+                    onMouseDown={(e) => { e.currentTarget.style.transform = "scale(0.95)"; }}
+                    onMouseUp={(e) => { e.currentTarget.style.transform = ""; }}
                   >
-                    Soumettre l&apos;examen
+                    💾 Soumettre l&apos;examen
                   </button>
                   <p
                     className="text-center text-muted-foreground mt-2"
@@ -797,6 +807,34 @@ function StudentExamPage() {
                     Une fois soumis, vous ne pourrez plus modifier vos
                     r&eacute;ponses.
                   </p>
+                </div>
+              )}
+
+              {/* Loading screen after submit */}
+              {submitting && (
+                <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6"
+                  style={{ background: "rgba(15,10,40,0.92)", backdropFilter: "blur(8px)" }}>
+                  <style>{`@keyframes pulse-ring { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.7;transform:scale(1.08)} }`}</style>
+                  {/* Animated brain/AI icon */}
+                  <div style={{ fontSize: "56px", animation: "pulse-ring 1.5s ease-in-out infinite" }}>🤖</div>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+                    <p style={{ color: "#fff", fontFamily: "'Times New Roman',serif", fontSize: "16px", fontWeight: "bold" }}>
+                      Correction en cours...
+                    </p>
+                    <p style={{ color: "#c4b8e8", fontFamily: "'Times New Roman',serif", fontSize: "12px" }}>
+                      L'IA analyse vos réponses
+                    </p>
+                  </div>
+                  {/* Animated dots progress bar */}
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {[0,1,2,3,4].map((i) => (
+                      <div key={i} style={{
+                        width: "10px", height: "10px", borderRadius: "50%",
+                        background: "#6C4CE0",
+                        animation: `pulse-ring 1s ease-in-out ${i * 0.15}s infinite`,
+                      }} />
+                    ))}
+                  </div>
                 </div>
               )}
 

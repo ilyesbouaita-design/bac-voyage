@@ -131,20 +131,19 @@ select {
   transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Hover: lift up */
+/* Hover: lift up — works even on inline-styled buttons */
 button:not(:disabled):hover,
-[role="button"]:not([aria-disabled="true"]):hover,
-a:hover {
-  transform: translateY(-2px);
+[role="button"]:not([aria-disabled="true"]):hover {
+  transform: translateY(-2px) !important;
+  filter: brightness(1.05);
 }
 
-/* Active/click: press down with scale */
+/* Active/click: press down */
 button:not(:disabled):active,
-[role="button"]:not([aria-disabled="true"]):active,
-a:active {
-  transform: scale(0.94) translateY(0px);
-  transition-duration: 80ms;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+[role="button"]:not([aria-disabled="true"]):active {
+  transform: scale(0.94) !important;
+  filter: brightness(0.95);
+  transition-duration: 80ms !important;
 }
 
 /* Disabled: no animation */
