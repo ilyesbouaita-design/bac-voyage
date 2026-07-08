@@ -748,7 +748,6 @@ export function gradeRichtigFalsch(params: {
   let zitatValid = false;
   let zitatNote: string | null = null;
   let zitatNoteDe: string | null = null;
-  let zitatNoteAr: string | null = null;
 
   if (!studZN) {
     // No zitat at all
@@ -781,9 +780,7 @@ export function gradeRichtigFalsch(params: {
     }
   }
 
-  // Compute score
-  const rfScore = rfCorrect ? points * 0.5 : 0;      // 0.25 of 0.5 = 0.125... actually:
-  // points = 0.5 per statement. Split evenly: 0.25 for R/F, 0.25 for Zitat.
+  // Compute score: points = 0.5 per statement, split evenly: 0.25 R/F + 0.25 Zitat.
   const rfHalf = points / 2;
   const zitatHalf = points / 2;
   const totalScore = (rfCorrect ? rfHalf : 0) + (zitatValid ? zitatHalf : 0);
