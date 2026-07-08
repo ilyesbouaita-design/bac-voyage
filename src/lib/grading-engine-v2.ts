@@ -692,7 +692,6 @@ const EXACT_TYPES = new Set([
 
 const OPEN_TYPES = new Set([
   "fragen_zum_text",
-  "uebersetzung",
   "grammatik_satzbau",
   "grammatik_fragen_stellen",
   "grammatik_konnektoren",
@@ -1144,6 +1143,16 @@ export async function gradeAnswerV2(params: {
     });
   }
 
+  // ── ÜBERSETZUNG (Arabic): dedicated grader ──────────────────────────────────
+  if (questionType === "uebersetzung") {
+    return gradeUebersetzung({
+      studentAnswer,
+      referenceAnswer,
+      points,
+      locale,
+    });
+  }
+
   // ── FRAGEN ZUM TEXT: dedicated grader ───────────────────────────────────────
   if (questionType === "fragen_zum_text") {
     return gradeFragenZumText({
@@ -1241,6 +1250,185 @@ function stringifyStructured(obj: Record<string, any> | undefined | null): strin
     .sort()
     .map((k) => `${k}:${obj[k]}`)
     .join(" ");
+}
+
+// ============================================================================
+// ÜBERSETZUNG (German → Arabic) — dedicated grader
+//
+// Scoring (1 pt total):
+//   >= 70% key-word overlap with admin's reference Arabic translation → 1.0 pt
+//   >= 40%                                                            → 0.5 pt
+//   < 40%                                                             → 0 pt
+//
+// Arabic-aware normalization:
+//   - Strip common prefixes: ال، ب، ل، و، ف، ك، م
+//   - Strip common suffixes: ة، ات، ون، ين، ان، تان، ين، ها، هم، هن
+//   - Remove tashkeel (harakat): ً ٌ ٍ َ ُ ِ ّ ْ
+//   - Compare word roots after stripping (not exact strings)
+//
+// Comparison: student Arabic answer vs admin's reference Arabic translation.
+// Admin provides the reference in the exam builder.
+// No external library needed — pure string manipulation.
+// ============================================================================
+
+/** Strip Arabic diacritics (tashkeel) for comparison */
+function stripArabicDiacritics(text: string): string {
+  // Unicode range for Arabic tashkeel: U+064B to U+0652, U+0670
+  return text.replace(/[ً-ْٰ]/g, "");
+}
+
+/** Normalize an Arabic word to its approximate root/stem for comparison */
+function normalizeArabicWord(word: string): string {
+  let w = stripArabicDiacritics(word.trim().toLowerCase());
+
+  // Strip definite article ال at beginning
+  if (w.startsWith("ال")) w = w.slice(2);
+  else if (w.startsWith("ٱل")) w = w.slice(2);
+
+  // Strip common prefixes (single letter connectors)
+  if (w.length > 3 && /^[بلوفكم]/.test(w)) w = w.slice(1);
+
+  // Strip common feminine marker
+  if (w.endsWith("ة") && w.length > 3) w = w.slice(0, -1);
+
+  // Strip common plural suffixes
+  if (w.endsWith("ون") && w.length > 4) w = w.slice(0, -2);
+  if (w.endsWith("ين") && w.length > 4) w = w.slice(0, -2);
+  if (w.endsWith("ات") && w.length > 4) w = w.slice(0, -2);
+  if (w.endsWith("ان") && w.length > 4) w = w.slice(0, -2);
+
+  // Strip possessive/pronoun suffixes
+  if (w.endsWith("ها") && w.length > 4) w = w.slice(0, -2);
+  if (w.endsWith("هم") && w.length > 4) w = w.slice(0, -2);
+  if (w.endsWith("هن") && w.length > 4) w = w.slice(0, -2);
+
+  return w;
+}
+
+/** Arabic stopwords to ignore in comparison */
+const ARABIC_STOPWORDS = new Set([
+  "في", "من", "إلى", "على", "عن", "مع", "أن", "إن", "لا", "ما", "هو", "هي",
+  "هم", "هن", "أنا", "أنت", "نحن", "أنتم", "هذا", "هذه", "ذلك", "تلك",
+  "التي", "الذي", "الذين", "اللواتي", "كان", "كانت", "يكون", "تكون",
+  "و", "أو", "ثم", "لكن", "بل", "حتى", "إذا", "لو", "كي", "لأن",
+  "قد", "لم", "لن", "هل", "ل", "ب", "ك", "م",
+]);
+
+/** Extract meaningful Arabic content words from text */
+function extractArabicKeywords(text: string): string[] {
+  return stripArabicDiacritics(text)
+    .split(/[\s،,؛;.!?؟\-–—()\[\]{}«»"']+/)
+    .map((w) => normalizeArabicWord(w))
+    .filter((w) => w.length >= 2 && !ARABIC_STOPWORDS.has(w));
+}
+
+export function gradeUebersetzung(params: {
+  studentAnswer: string;      // student's Arabic translation
+  referenceAnswer: string;    // admin's Arabic reference translation
+  points: number;             // 1 pt per the barème
+  locale?: Locale;
+}): GradeResultV2 {
+  const { studentAnswer, referenceAnswer, points, locale = "fr" } = params;
+
+  if (!studentAnswer.trim()) {
+    return {
+      score: 0, maxScore: points, percentage: 0,
+      isCorrect: false, isPartial: false,
+      method: "exact", confidence: 1,
+      feedback_fr: locale === "ar" ? "لم يتم تقديم أي ترجمة." : "Aucune traduction fournie.",
+      feedback_de: "Keine Übersetzung angegeben.",
+    };
+  }
+
+  // Extract normalized keyword sets from both
+  const refKws = extractArabicKeywords(referenceAnswer);
+  const studKws = extractArabicKeywords(studentAnswer);
+
+  if (refKws.length === 0) {
+    // No reference to compare against — needs manual review
+    return {
+      score: 0, maxScore: points, percentage: 0,
+      isCorrect: false, isPartial: false,
+      method: "manual", confidence: 0,
+      feedback_fr: "Traduction à corriger manuellement.",
+      feedback_de: "Übersetzung muss manuell überprüft werden.",
+      needsManualReview: true,
+    };
+  }
+
+  // Match: for each reference keyword, check if student has it (or a close form)
+  const refSet = new Set(refKws);
+  const studSet = new Set(studKws);
+
+  // Direct root match
+  let matched = 0;
+  const missingKws: string[] = [];
+
+  for (const rw of refSet) {
+    if (studSet.has(rw)) {
+      matched++;
+    } else {
+      // Fuzzy match: edit distance ≤ 2 for longer words (handles spelling variants)
+      const fuzzyMatch = [...studSet].some(
+        (sw) => rw.length >= 4 && levenshteinDistance(rw, sw) <= 2
+      );
+      if (fuzzyMatch) {
+        matched++;
+      } else {
+        missingKws.push(rw);
+      }
+    }
+  }
+
+  const overlap = matched / refSet.size;
+
+  // Score thresholds
+  let score: number;
+  let isCorrect: boolean;
+  let isPartial: boolean;
+  let feedback_fr: string;
+  let feedback_de: string;
+
+  if (overlap >= 0.70) {
+    score = points;
+    isCorrect = true;
+    isPartial = false;
+    feedback_fr = ""; // no feedback for full score
+    feedback_de = "";
+  } else if (overlap >= 0.40) {
+    score = points * 0.5;
+    isCorrect = false;
+    isPartial = true;
+    feedback_fr = locale === "ar"
+      ? "الترجمة ناقصة. معلومات أساسية غائبة."
+      : "Traduction incomplète. Des informations essentielles manquent.";
+    feedback_de = "Die Übersetzung ist unvollständig. Wesentliche Informationen fehlen.";
+  } else {
+    score = 0;
+    isCorrect = false;
+    isPartial = false;
+    feedback_fr = locale === "ar"
+      ? "الترجمة تحتوي على أخطاء كثيرة جداً."
+      : "La traduction contient trop d'erreurs.";
+    feedback_de = "Die Übersetzung enthält zu viele Fehler.";
+  }
+
+  return {
+    score,
+    maxScore: points,
+    percentage: Math.round((score / points) * 100),
+    isCorrect,
+    isPartial,
+    method: "keyword",
+    confidence: 0.80,
+    feedback_fr,
+    feedback_de,
+    details: {
+      keywordsFound: [...refSet].filter((w) => !missingKws.includes(w)),
+      keywordsMissing: missingKws,
+    },
+    needsManualReview: false,
+  };
 }
 
 // ---------------------------------------------------------------------------
