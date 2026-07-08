@@ -701,35 +701,22 @@ const OPEN_TYPES = new Set([
 
 // ============================================================================
 // RICHTIG ODER FALSCH — dedicated, precise grader
-//
-// Scoring rules (each statement = 0.5 pt max):
-//   R/F correct + Zitat valid   = 0.5
-//   R/F correct + Zitat invalid = 0.25
-//   R/F wrong   + Zitat valid   = 0.25  (note: wrong answer)
-//   R/F wrong   + Zitat invalid = 0.0
-//
-// Zitat valid when ALL of these hold:
-//   1. keywordOverlap(student_zitat, reference_zitat) >= 0.50
-//   2. len(student_zitat) <= 1.5 × len(reference_zitat)   (not too long)
-//   3. keywordOverlap >= 0.50  (i.e. NOT a pure paraphrase/personal rewriting)
-//
-// Tolerance: capitalization, trailing punctuation, umlaut variants ignored.
 // ============================================================================
 
-function extractKeywords(text: string): string[] {
-  const stopSet = GERMAN_STOPWORDS;
+/** Keyword extraction using stemming + stopword filter (shared by R/F, Fragen, Titel). */
+function rfExtractKeywords(text: string): string[] {
   return text
     .toLowerCase()
     .replace(/[.,!?;:()"«»„"—–-]/g, " ")
     .split(/\s+/)
     .map((w) => stemDE(w.replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss")))
-    .filter((w) => w.length >= 3 && !stopSet.has(w));
+    .filter((w) => w.length >= 3 && !GERMAN_STOPWORDS.has(w));
 }
 
 function zitatKeywordOverlap(studentZitat: string, referenceZitat: string): number {
-  const refKws = new Set(extractKeywords(referenceZitat));
+  const refKws = new Set(rfExtractKeywords(referenceZitat));
   if (refKws.size === 0) return 0;
-  const studKws = extractKeywords(studentZitat);
+  const studKws = rfExtractKeywords(studentZitat);
   const found = studKws.filter((w) => refKws.has(w)).length;
   return found / refKws.size;
 }
