@@ -1566,6 +1566,12 @@ export async function gradeAnswerV2(params: {
   points: number;
   locale?: Locale;
   toleranceRules?: string[];
+  // Grammatik-specific metadata (passed through from orchestrator)
+  targetTense?: string;
+  direction?: "aktiv" | "passiv";
+  clauseType?: string;
+  correctModal?: string;
+  [key: string]: any; // allow extra fields from orchestrator
 }): Promise<GradeResultV2> {
   const {
     questionType,
@@ -1575,6 +1581,10 @@ export async function gradeAnswerV2(params: {
     points,
     locale = "fr",
     toleranceRules,
+    targetTense,
+    direction,
+    clauseType,
+    correctModal,
   } = params;
 
   // Coerce object answers (e.g. kombinieren answer_key) to a stable string.
@@ -1645,13 +1655,13 @@ export async function gradeAnswerV2(params: {
 
   // ── GRAMMATIK: Tempus (dedicated grader) ────────────────────────────────────
   if (questionType === "grammatik_tempus") {
+    // Prefer explicit metadata from orchestrator; fall back to studentAnswer object
     const meta = typeof params.studentAnswer === "object" && params.studentAnswer !== null
-      ? (params.studentAnswer as Record<string, any>)
-      : {};
+      ? (params.studentAnswer as Record<string, any>) : {};
     return gradeTempus({
       studentAnswer,
       referenceAnswer,
-      targetTense: meta.targetTense ?? meta.tense ?? "Präteritum",
+      targetTense: targetTense ?? meta.targetTense ?? meta.tense ?? "Präteritum",
       points,
       locale,
     });
@@ -1660,12 +1670,11 @@ export async function gradeAnswerV2(params: {
   // ── GRAMMATIK: Aktiv/Passiv (dedicated grader) ──────────────────────────────
   if (questionType === "grammatik_aktiv_passiv") {
     const meta = typeof params.studentAnswer === "object" && params.studentAnswer !== null
-      ? (params.studentAnswer as Record<string, any>)
-      : {};
+      ? (params.studentAnswer as Record<string, any>) : {};
     return gradeAktivPassiv({
       studentAnswer,
       referenceAnswer,
-      direction: meta.direction ?? "passiv",
+      direction: direction ?? meta.direction ?? "aktiv",
       points,
       locale,
     });
@@ -1674,12 +1683,11 @@ export async function gradeAnswerV2(params: {
   // ── GRAMMATIK: Satzbau / Satzverbindung (dedicated grader) ──────────────────
   if (questionType === "grammatik_satzbau") {
     const meta = typeof params.studentAnswer === "object" && params.studentAnswer !== null
-      ? (params.studentAnswer as Record<string, any>)
-      : {};
+      ? (params.studentAnswer as Record<string, any>) : {};
     return gradeSatzbau({
       studentAnswer,
       referenceAnswer,
-      clauseType: meta.clauseType ?? "temporalsatz",
+      clauseType: clauseType ?? meta.clauseType ?? "konzessivsatz",
       points,
       locale,
     });
@@ -1688,12 +1696,11 @@ export async function gradeAnswerV2(params: {
   // ── GRAMMATIK: Modalverb (dedicated grader) ─────────────────────────────────
   if (questionType === "grammatik_modalverb") {
     const meta = typeof params.studentAnswer === "object" && params.studentAnswer !== null
-      ? (params.studentAnswer as Record<string, any>)
-      : {};
+      ? (params.studentAnswer as Record<string, any>) : {};
     return gradeModalverb({
       studentAnswer,
       referenceAnswer,
-      correctModal: meta.correctModal ?? meta.modal ?? "können",
+      correctModal: correctModal ?? meta.correctModal ?? meta.modal ?? "können",
       points,
       locale,
     });
