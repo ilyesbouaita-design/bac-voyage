@@ -691,7 +691,6 @@ const EXACT_TYPES = new Set([
 ]);
 
 const OPEN_TYPES = new Set([
-  "richtig_falsch_zitat",
   "fragen_zum_text",
   "uebersetzung",
   "grammatik_satzbau",
@@ -699,6 +698,147 @@ const OPEN_TYPES = new Set([
   "grammatik_konnektoren",
   "grammatik_modalverb",
 ]);
+
+// ============================================================================
+// RICHTIG ODER FALSCH — dedicated, precise grader
+//
+// Scoring rules (each statement = 0.5 pt max):
+//   R/F correct + Zitat valid   = 0.5
+//   R/F correct + Zitat invalid = 0.25
+//   R/F wrong   + Zitat valid   = 0.25  (note: wrong answer)
+//   R/F wrong   + Zitat invalid = 0.0
+//
+// Zitat valid when ALL of these hold:
+//   1. keywordOverlap(student_zitat, reference_zitat) >= 0.50
+//   2. len(student_zitat) <= 1.5 × len(reference_zitat)   (not too long)
+//   3. keywordOverlap >= 0.50  (i.e. NOT a pure paraphrase/personal rewriting)
+//
+// Tolerance: capitalization, trailing punctuation, umlaut variants ignored.
+// ============================================================================
+
+function extractKeywords(text: string): string[] {
+  const stopSet = GERMAN_STOPWORDS;
+  return text
+    .toLowerCase()
+    .replace(/[.,!?;:()"«»„"—–-]/g, " ")
+    .split(/\s+/)
+    .map((w) => stemDE(w.replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss")))
+    .filter((w) => w.length >= 3 && !stopSet.has(w));
+}
+
+function zitatKeywordOverlap(studentZitat: string, referenceZitat: string): number {
+  const refKws = new Set(extractKeywords(referenceZitat));
+  if (refKws.size === 0) return 0;
+  const studKws = extractKeywords(studentZitat);
+  const found = studKws.filter((w) => refKws.has(w)).length;
+  return found / refKws.size;
+}
+
+function zitatTooLong(studentZitat: string, referenceZitat: string): boolean {
+  // Word-count based comparison
+  const refWords = referenceZitat.trim().split(/\s+/).length;
+  const studWords = studentZitat.trim().split(/\s+/).length;
+  return studWords > refWords * 1.5;
+}
+
+export function gradeRichtigFalsch(params: {
+  studentRfChoice: "richtig" | "falsch";   // student's R/F answer
+  correctRfChoice: "richtig" | "falsch";   // admin's correct answer
+  studentZitat: string;                     // what student wrote as citation
+  referenceZitat: string;                   // admin's reference citation
+  points: number;                           // total per-statement = 0.5
+  locale?: Locale;
+}): GradeResultV2 {
+  const { studentRfChoice, correctRfChoice, studentZitat, referenceZitat, points, locale = "fr" } = params;
+  const rfCorrect = studentRfChoice === correctRfChoice;
+
+  // Zitat scoring — tolerance: ignore case, trailing punct, umlaut variants
+  const studZN = studentZitat.trim().replace(/[.!?]+$/, "").toLowerCase()
+    .replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss");
+  const refZN = referenceZitat.trim().replace(/[.!?]+$/, "").toLowerCase()
+    .replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss");
+
+  let zitatValid = false;
+  let zitatNote: string | null = null;
+  let zitatNoteDe: string | null = null;
+  let zitatNoteAr: string | null = null;
+
+  if (!studZN) {
+    // No zitat at all
+    zitatValid = false;
+    zitatNote = locale === "ar"
+      ? "لم يتم تقديم أي زيتات."
+      : "Aucun Zitat fourni.";
+    zitatNoteDe = "Kein Zitat angegeben.";
+  } else {
+    const overlap = zitatKeywordOverlap(studZN, refZN);
+    const tooLong = zitatTooLong(studentZitat, referenceZitat);
+
+    if (tooLong) {
+      // Too long → Zitat invalid, add note
+      zitatValid = false;
+      zitatNote = locale === "ar"
+        ? "الزيتات طويل جداً — استخرج الجزء الضروري فقط."
+        : "Le Zitat est trop long — extrayez uniquement la partie pertinente.";
+      zitatNoteDe = "Das Zitat ist zu lang — geben Sie nur den relevanten Satzabschnitt an.";
+    } else if (overlap >= 0.50) {
+      // Good keyword overlap → direct quote, valid
+      zitatValid = true;
+    } else {
+      // Low overlap → paraphrase, not a direct quote
+      zitatValid = false;
+      zitatNote = locale === "ar"
+        ? "يجب نقل الزيتات حرفياً من النص وليس بأسلوبك الخاص."
+        : "Le Zitat doit être copié du texte, pas reformulé avec vos propres mots.";
+      zitatNoteDe = "Das Zitat muss direkt aus dem Text abgeschrieben werden, nicht in eigenen Worten.";
+    }
+  }
+
+  // Compute score
+  const rfScore = rfCorrect ? points * 0.5 : 0;      // 0.25 of 0.5 = 0.125... actually:
+  // points = 0.5 per statement. Split evenly: 0.25 for R/F, 0.25 for Zitat.
+  const rfHalf = points / 2;
+  const zitatHalf = points / 2;
+  const totalScore = (rfCorrect ? rfHalf : 0) + (zitatValid ? zitatHalf : 0);
+  const pct = Math.round((totalScore / points) * 100);
+
+  // Build feedback — only when not perfect
+  const feedbackParts: string[] = [];
+  const feedbackPartsDe: string[] = [];
+
+  if (!rfCorrect && zitatValid) {
+    feedbackParts.push(locale === "ar"
+      ? "إجابة صح/خطأ غير صحيحة، لكن الزيتات صحيح."
+      : "La réponse Richtig/Falsch est incorrecte, mais le Zitat est valide.");
+    feedbackPartsDe.push("Die Richtig/Falsch-Antwort ist falsch, das Zitat aber korrekt.");
+  }
+  if (zitatNote) {
+    feedbackParts.push(zitatNote);
+    feedbackPartsDe.push(zitatNoteDe ?? zitatNote);
+  }
+
+  const feedback_fr = feedbackParts.join(" ") || "";
+  const feedback_de = feedbackPartsDe.join(" ") || "";
+
+  return {
+    score: totalScore,
+    maxScore: points,
+    percentage: pct,
+    isCorrect: totalScore >= points,
+    isPartial: totalScore > 0 && totalScore < points,
+    method: "rule",
+    confidence: 0.9,
+    feedback_fr,
+    feedback_de,
+    details: {
+      toleranceApplied: [
+        rfCorrect ? "rf_correct" : "rf_wrong",
+        zitatValid ? "zitat_valid" : "zitat_invalid",
+      ],
+    },
+    needsManualReview: false,
+  };
+}
 
 export async function gradeAnswerV2(params: {
   questionType: string;
@@ -731,6 +871,30 @@ export async function gradeAnswerV2(params: {
     ? toleranceRules
     : ["IGNORE_CAPITALIZATION", "IGNORE_TRAILING_PERIOD", "ACCEPT_UMLAUT_ALTERNATIVE", "ACCEPT_HYPHEN_VARIATION"]
   ).map((id) => DEFAULT_TOLERANCE_RULES[id] ?? { id, penalty: 0, label: id });
+
+  // ── RICHTIG ODER FALSCH: special dedicated grader ──────────────────────────
+  if (questionType === "richtig_falsch_zitat") {
+    // studentAnswer is expected to be: { choice: "richtig"|"falsch", zitat: string }
+    // referenceAnswer encodes: "richtig::Die Rhein-Main-Region..." or just the zitat
+    const raw = params.studentAnswer;
+    const structuredAnswer = typeof raw === "object" && raw !== null ? raw as Record<string,any> : {};
+    const studentRfChoice = (structuredAnswer.choice ?? structuredAnswer.rf_choice ?? "falsch") as "richtig" | "falsch";
+    const studentZitat = String(structuredAnswer.zitat ?? structuredAnswer.zitat_text ?? studentAnswer ?? "");
+
+    // Reference format: "richtig::citation text" or "falsch::citation text"
+    const refParts = referenceAnswer.split("::");
+    const correctRfChoice = (refParts[0]?.toLowerCase().trim() === "richtig" ? "richtig" : "falsch") as "richtig" | "falsch";
+    const referenceZitat = refParts.slice(1).join("::").trim() || referenceAnswer;
+
+    return gradeRichtigFalsch({
+      studentRfChoice,
+      correctRfChoice,
+      studentZitat,
+      referenceZitat,
+      points,
+      locale,
+    });
+  }
 
   // Empty student answer -> immediate wrong, no manual review needed.
   if (!studentAnswer || !studentAnswer.trim()) {
