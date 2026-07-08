@@ -841,6 +841,131 @@ export function gradeRichtigFalsch(params: {
 }
 
 // ============================================================================
+// TITEL DES TEXTES — dedicated grader
+//
+// Rules (1 pt total):
+//   - Ignore capitalization, punctuation, trailing spaces
+//   - If any accepted title has keyword overlap >= 60% with student title
+//     → 1 pt (full credit)
+//   - If closest accepted title has edit distance <= 2 from ANY word in student title
+//     → 1 pt (full credit) + typo note: "Avez-vous voulu écrire [word] ?"
+//   - Otherwise → 0 pt
+//
+// Admin provides a list of accepted titles. Semantic similarity is checked
+// via keyword overlap + edit distance on individual words.
+// ============================================================================
+
+export function gradeTitel(params: {
+  studentAnswer: string;
+  acceptedTitles: string[];   // list of titles admin considers correct
+  points: number;
+  locale?: Locale;
+}): GradeResultV2 {
+  const { studentAnswer, acceptedTitles, points, locale = "fr" } = params;
+
+  if (!studentAnswer.trim()) {
+    return {
+      score: 0, maxScore: points, percentage: 0,
+      isCorrect: false, isPartial: false,
+      method: "exact", confidence: 1,
+      feedback_fr: locale === "ar" ? "لم يتم تقديم عنوان." : "Aucun titre fourni.",
+      feedback_de: "Kein Titel angegeben.",
+    };
+  }
+
+  // Normalize student answer: lowercase, strip punctuation
+  const normStudentRaw = studentAnswer.trim().toLowerCase()
+    .replace(/[.,!?;:«»„"'"]/g, "").trim();
+  const normStudentUml = normStudentRaw
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss");
+
+  // Student title words (for per-word typo check)
+  const studentWords = normStudentUml.split(/\s+/).filter((w) => w.length >= 3);
+
+  let bestOverlap = 0;
+  let bestTitleMatch = "";
+  let typoWordOriginal: string | null = null;
+  let typoWordCorrected: string | null = null;
+
+  for (const title of acceptedTitles) {
+    const normTitle = title.trim().toLowerCase()
+      .replace(/[.,!?;:«»„"'"]/g, "")
+      .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss");
+
+    // Keyword overlap
+    const studKws = new Set(extractKeywords(normStudentUml));
+    const titleKws = extractKeywords(normTitle);
+    const titleKwSet = new Set(titleKws);
+    const found = [...studKws].filter((w) => titleKwSet.has(w)).length;
+    const overlap = titleKwSet.size > 0 ? found / titleKwSet.size : 0;
+
+    if (overlap > bestOverlap) {
+      bestOverlap = overlap;
+      bestTitleMatch = title;
+    }
+
+    // Per-word typo check: any student word within edit distance 2 of any title word?
+    const titleWords = normTitle.split(/\s+/).filter((w) => w.length >= 3);
+    for (const sw of studentWords) {
+      for (const tw of titleWords) {
+        if (sw !== tw && levenshteinDistance(sw, tw) <= 2 && tw.length >= 4) {
+          // Found a near-match — record the typo
+          if (!typoWordOriginal) {
+            typoWordOriginal = sw;
+            typoWordCorrected = tw;
+          }
+          // Boost overlap for this title
+          if (overlap + 0.3 > bestOverlap) {
+            bestOverlap = Math.min(1, overlap + 0.3);
+            bestTitleMatch = title;
+          }
+        }
+      }
+    }
+  }
+
+  // Score decision
+  if (bestOverlap >= 0.60) {
+    // Accepted — build optional typo note
+    let feedback_fr = "";
+    let feedback_de = "";
+    if (typoWordCorrected) {
+      const correctedDisplay = acceptedTitles.find((t) =>
+        t.toLowerCase().replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss")
+          .includes(typoWordCorrected!)
+      ) ?? typoWordCorrected;
+      feedback_fr = locale === "ar"
+        ? `هل تقصد "${correctedDisplay}"؟ انتبه إلى الإملاء.`
+        : `Avez-vous voulu écrire « ${correctedDisplay} » ? Attention à l'orthographe.`;
+      feedback_de = `Meinten Sie „${correctedDisplay}"? Achten Sie auf die Rechtschreibung.`;
+    }
+    return {
+      score: points, maxScore: points, percentage: 100,
+      isCorrect: true, isPartial: false,
+      method: "rule", confidence: 0.9,
+      feedback_fr, feedback_de,
+      details: { toleranceApplied: typoWordCorrected ? ["typo_forgiven"] : [] },
+      needsManualReview: false,
+    };
+  }
+
+  // Not accepted
+  return {
+    score: 0, maxScore: points, percentage: 0,
+    isCorrect: false, isPartial: false,
+    method: "keyword", confidence: 0.75,
+    feedback_fr: locale === "ar"
+      ? "العنوان لا يعكس الفكرة الرئيسية للنص."
+      : "Ce titre ne reflète pas l'idée principale du texte.",
+    feedback_de: "Dieser Titel spiegelt nicht die Hauptidee des Textes wider.",
+    details: { keywordsMissing: extractKeywords(
+      (bestTitleMatch || acceptedTitles[0] || "").toLowerCase()
+    ).filter((w) => !new Set(studentWords).has(w)) },
+    needsManualReview: false,
+  };
+}
+
+// ============================================================================
 // FRAGEN ZUM TEXT — dedicated grader
 //
 // Each question = 1 pt, split evenly:
@@ -1020,6 +1145,16 @@ export async function gradeAnswerV2(params: {
       correctRfChoice,
       studentZitat,
       referenceZitat,
+      points,
+      locale,
+    });
+  }
+
+  // ── TITEL DES TEXTES: dedicated grader ──────────────────────────────────────
+  if (questionType === "titel") {
+    return gradeTitel({
+      studentAnswer,
+      acceptedTitles: [referenceAnswer, ...acceptedVariants].filter(Boolean),
       points,
       locale,
     });
