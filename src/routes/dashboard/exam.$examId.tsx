@@ -1,5 +1,7 @@
 import { createFileRoute, useParams, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { gradeExamAttempt } from "@/lib/grading-orchestrator";
+import type { GradeResultV2 } from "@/lib/grading-engine-v2";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/useAuth";
 import { useLocale } from "@/lib/useLocale";
@@ -137,8 +139,11 @@ function StudentExamPage() {
 
   // Results
   const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false); // loading state
-  const [results, setResults] = useState<Record<string, any>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [gradingError, setGradingError] = useState<string | null>(null);
+  const [questionResults, setQuestionResults] = useState<Record<string, GradeResultV2>>({});
+  const [totalScore, setTotalScore] = useState(0);
+  const [maxScore, setMaxScore] = useState(0);
 
   // Timer
   const timer = useTimer(exam?.duration_minutes ?? null);
@@ -260,11 +265,19 @@ function StudentExamPage() {
       }
     }
 
-    // Show loading screen for 3 seconds before revealing results
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    // Grade the attempt with the V2 offline engine (show loading screen meanwhile)
+    try {
+      const gradingResult = await gradeExamAttempt(attempt.id, locale as "fr" | "ar");
+      setQuestionResults(gradingResult.questionResults);
+      setTotalScore(gradingResult.totalScore);
+      setMaxScore(gradingResult.maxScore);
+    } catch (err) {
+      console.error("Grading failed:", err);
+      setGradingError("La correction automatique a échoué. Vos réponses ont été sauvegardées.");
+    }
+
     setSubmitting(false);
     setSubmitted(true);
-    // TODO: Trigger AI correction and load results
   }
 
   // Section nav scroll
@@ -838,25 +851,70 @@ function StudentExamPage() {
                 </div>
               )}
 
-              {/* Score (after submit) */}
+              {/* Results after grading */}
               {submitted && (
-                <div className="rounded-2xl border border-border bg-card p-5 text-center">
-                  <p
-                    className="font-bold text-[#0FB6A3]"
-                    style={{ fontSize: "14px" }}
-                  >
-                    Examen soumis avec succ&egrave;s !
-                  </p>
-                  <p
-                    className="text-muted-foreground mt-1"
-                    style={{ fontSize: "11px" }}
-                  >
-                    Vos r&eacute;ponses sont en cours de correction par l&apos;IA.
-                  </p>
+                <div className="pb-8 space-y-4">
+                  {/* Score summary card */}
+                  <div className="rounded-2xl border bg-card p-6 text-center shadow-sm"
+                    style={{ borderColor: "#0FB6A3" }}>
+                    {gradingError ? (
+                      <p className="text-[#FF5A5F] font-bold" style={{ fontSize: "13px" }}>{gradingError}</p>
+                    ) : (
+                      <>
+                        <p className="font-bold" style={{ fontSize: "20px", color: "#0FB6A3" }}>
+                          {totalScore.toFixed(2)} / {maxScore} pts
+                        </p>
+                        <div className="mt-3 h-3 rounded-full bg-secondary overflow-hidden">
+                          <div className="h-3 rounded-full transition-all duration-700"
+                            style={{
+                              width: `${maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0}%`,
+                              background: "linear-gradient(90deg, #6C4CE0, #0FB6A3)",
+                            }} />
+                        </div>
+                        <p className="mt-2 text-muted-foreground" style={{ fontSize: "11px" }}>
+                          {maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0}% — {
+                            totalScore / maxScore >= 0.7 ? "✅ Sehr gut!" :
+                            totalScore / maxScore >= 0.5 ? "⚠️ Passable" : "❌ À revoir"
+                          }
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Per-question feedback */}
+                  {Object.keys(questionResults).length > 0 && sections.flatMap(s => s.questions).map((q) => {
+                    const r = questionResults[q.id];
+                    if (!r) return null;
+                    const color = r.isCorrect ? "#16a34a" : r.isPartial ? "#FFB200" : "#FF5A5F";
+                    const icon = r.isCorrect ? "✅" : r.isPartial ? "⚠️" : "❌";
+                    const feedback = locale === "ar" ? r.feedback_fr : r.feedback_fr; // always FR for now
+                    return (
+                      <div key={q.id} className="rounded-xl border bg-card px-4 py-3 flex items-start gap-3"
+                        style={{ borderLeft: `4px solid ${color}`, fontFamily: "'Times New Roman',serif", fontSize: "12px" }}>
+                        <span style={{ fontSize: "16px", flexShrink: 0 }}>{icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-semibold text-foreground truncate">
+                              {q.prompt_fr || q.bac_content?.bac_type || "Question"}
+                            </p>
+                            <span className="font-bold shrink-0" style={{ color }}>
+                              {r.score.toFixed(2)} / {r.maxScore} pts
+                            </span>
+                          </div>
+                          {feedback && (
+                            <p className="mt-1 text-muted-foreground" style={{ fontSize: "11px" }}>
+                              {feedback}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
                   <button
                     onClick={() => navigate({ to: "/dashboard/bac" })}
-                    className="mt-4 px-6 py-2 rounded-xl border border-border hover:bg-accent transition-colors"
-                    style={{ fontSize: "12px" }}
+                    className="w-full py-3 rounded-xl font-bold text-white"
+                    style={{ background: "linear-gradient(90deg, #6C4CE0, #0FB6A3)", fontSize: "13px" }}
                   >
                     Retour aux examens
                   </button>
