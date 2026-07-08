@@ -254,7 +254,7 @@ export const GERMAN_IRREGULAR_VERBS: Record<string, string> = {
   // --- fangen / anfangen ---
   fange: "fangen", fängst: "fangen", fängt: "fangen", faengt: "fangen",
   fing: "fangen", fingst: "fangen", fingen: "fangen", gefangen: "fangen",
-  fängt an: "anfangen", fing an: "anfangen", angefangen: "anfangen",
+  "fängt an": "anfangen", "fing an": "anfangen", angefangen: "anfangen",
 
   // --- rufen ---
   rufe: "rufen", rufst: "rufen", ruft: "rufen",
