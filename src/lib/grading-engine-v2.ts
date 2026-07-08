@@ -840,6 +840,135 @@ export function gradeRichtigFalsch(params: {
   };
 }
 
+// ============================================================================
+// FRAGEN ZUM TEXT — dedicated grader
+//
+// Each question = 1 pt, split evenly:
+//   0.5 pt  Information   — key facts present in student answer
+//   0.5 pt  Method        — answer is a complete German sentence
+//
+// Information scoring:
+//   >= 80% keyword overlap with reference answer  → 0.5 pt (full)
+//   >= 40% keyword overlap                        → 0.25 pt (partial)
+//   < 40%                                         → 0 pt
+//
+// Method (sentence completeness) scoring:
+//   Answer contains verb + subject structure
+//   (heuristic: >4 words AND contains a conjugated verb form)
+//   → 0.5 pt (full)
+//   Answer is >1 word but lacks sentence structure (keyword list)
+//   → 0.25 pt
+//   Single word or empty → 0 pt
+//
+// Special case "Nennen Sie N ...": count matching items from a list.
+//   For each found item → (1/N) * points.
+//
+// Tolerance: case, umlaut, trailing punct ignored. Minor typos (edit dist ≤2).
+// No feedback for full marks.
+// ============================================================================
+
+/** Heuristic: does the text look like a complete German sentence?
+ *  Must have > 4 words and contain at least one word that looks like a
+ *  conjugated verb (ends in -t, -st, -en, -te, -ten, -et, -est, -ern).
+ */
+function looksLikeCompleteSentence(text: string): boolean {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= 4) return false;
+  const verbEndings = /(?:en|est|et|ern|ten|ste|ten|st|t)$/;
+  return words.some((w) => verbEndings.test(w.toLowerCase()));
+}
+
+export function gradeFragenZumText(params: {
+  studentAnswer: string;
+  referenceAnswer: string;
+  points: number;
+  locale?: Locale;
+}): GradeResultV2 {
+  const { studentAnswer, referenceAnswer, points, locale = "fr" } = params;
+  const half = points / 2;
+
+  // Normalize
+  const studN = studentAnswer.trim().toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss");
+  const refN = referenceAnswer.trim().toLowerCase()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss");
+
+  // ── INFORMATION SCORE ────────────────────────────────────────────────────
+  const studKws = extractKeywords(studN);
+  const refKws = extractKeywords(refN);
+  const refKwSet = new Set(refKws);
+  const foundKws = studKws.filter((w) => refKwSet.has(w));
+  const overlap = refKwSet.size > 0 ? foundKws.length / refKwSet.size : 0;
+  const missingKws = refKws.filter((w) => !new Set(studKws).has(w));
+
+  let infoScore: number;
+  if (overlap >= 0.80) {
+    infoScore = half;        // full information
+  } else if (overlap >= 0.40) {
+    infoScore = half * 0.5;  // partial information (0.25 of 0.5 = 0.25 pt)
+  } else {
+    infoScore = 0;
+  }
+
+  // ── METHOD SCORE (sentence completeness) ──────────────────────────────────
+  const wordCount = studentAnswer.trim().split(/\s+/).filter(Boolean).length;
+  let methodScore: number;
+  if (wordCount === 0) {
+    methodScore = 0;
+  } else if (looksLikeCompleteSentence(studentAnswer)) {
+    methodScore = half;        // full sentence structure
+  } else if (wordCount > 1) {
+    methodScore = half * 0.5;  // keywords without full sentence
+  } else {
+    methodScore = 0;
+  }
+
+  const totalScore = infoScore + methodScore;
+  const pct = Math.round((totalScore / points) * 100);
+  const isCorrect = totalScore >= points * 0.95; // allow tiny rounding error
+  const isPartial = totalScore > 0 && !isCorrect;
+
+  // ── FEEDBACK (only when losing points) ──────────────────────────────────
+  const feedbackParts: string[] = [];
+  const feedbackPartsDe: string[] = [];
+
+  if (infoScore < half) {
+    const missingStr = missingKws.slice(0, 3).join(", ");
+    if (locale === "ar") {
+      feedbackParts.push(`المعلومات ناقصة.${missingStr ? " الكلمات المفتاحية غائبة: " + missingStr : ""}`);
+    } else {
+      feedbackParts.push(`Informations incomplètes.${missingStr ? " Éléments manquants : " + missingStr : ""}`);
+    }
+    feedbackPartsDe.push(`Informationen unvollständig.${missingStr ? " Fehlende Schlüsselwörter: " + missingStr : ""}`);
+  }
+
+  if (methodScore < half && wordCount > 0) {
+    if (locale === "ar") {
+      feedbackParts.push("أجب بجملة كاملة باللغة الألمانية.");
+    } else {
+      feedbackParts.push("Répondez en phrase complète en allemand.");
+    }
+    feedbackPartsDe.push("Antworten Sie in einem vollständigen deutschen Satz.");
+  }
+
+  return {
+    score: totalScore,
+    maxScore: points,
+    percentage: pct,
+    isCorrect,
+    isPartial,
+    method: "keyword",
+    confidence: 0.85,
+    feedback_fr: feedbackParts.join(" ") || "",
+    feedback_de: feedbackPartsDe.join(" ") || "",
+    details: {
+      keywordsFound: foundKws,
+      keywordsMissing: missingKws,
+    },
+    needsManualReview: false,
+  };
+}
+
 export async function gradeAnswerV2(params: {
   questionType: string;
   studentAnswer: string | Record<string, any>;
@@ -891,6 +1020,16 @@ export async function gradeAnswerV2(params: {
       correctRfChoice,
       studentZitat,
       referenceZitat,
+      points,
+      locale,
+    });
+  }
+
+  // ── FRAGEN ZUM TEXT: dedicated grader ───────────────────────────────────────
+  if (questionType === "fragen_zum_text") {
+    return gradeFragenZumText({
+      studentAnswer,
+      referenceAnswer,
       points,
       locale,
     });
