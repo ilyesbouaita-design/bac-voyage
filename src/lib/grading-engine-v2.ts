@@ -14,7 +14,7 @@
 // and returns the best GradeResultV2 with localized feedback.
 // =============================================================================
 
-import { normalizeDE, stemDE } from "./german-morphology";
+import { normalizeDE, stemDE, GERMAN_IRREGULAR_VERBS } from "./german-morphology";
 import { embeddingService } from "./embedding-service";
 
 // ---------------------------------------------------------------------------
@@ -683,6 +683,8 @@ const EXACT_TYPES = new Set([
   "kompositum_loesen",
   "grammatik_tempus",
   "grammatik_aktiv_passiv",
+  "grammatik_satzbau",
+  "grammatik_modalverb",
   "deklination",
   "grammatik_deklination",
   "kombinieren",
@@ -692,10 +694,8 @@ const EXACT_TYPES = new Set([
 
 const OPEN_TYPES = new Set([
   "fragen_zum_text",
-  "grammatik_satzbau",
   "grammatik_fragen_stellen",
   "grammatik_konnektoren",
-  "grammatik_modalverb",
 ]);
 
 // ============================================================================
@@ -1077,6 +1077,486 @@ export function gradeFragenZumText(params: {
   };
 }
 
+// ============================================================================
+// GRAMMATIK — Satzbau, Modalverb, Tempus, Aktiv/Passiv (dedicated graders)
+// ============================================================================
+
+/** Check if a connector word is present in the student answer */
+function hasConnector(answer: string, clauseType: string): boolean {
+  const connectorMap: Record<string, RegExp> = {
+    finalsatz: /\b(damit|um\s+\S+\s+zu)\b/i,
+    konzessivsatz: /\b(obwohl|trotzdem)\b/i,
+    temporalsatz: /\b(nachdem|bevor|als|wenn)\b/i,
+    relativsatz: /\b(der|die|das|den|dem|dessen|deren)\b.*\b(ist|sind|war|waren|hat|hatte|haben|wird|werden|kann|muss|soll)\b/i,
+    konditionalsatz: /\b(wenn)\b.*\b(würde|hätte|wäre|könntest|müsstest)\b/i,
+  };
+  const re = connectorMap[clauseType.toLowerCase()];
+  return re ? re.test(answer) : false;
+}
+
+/** Extract the specific connector word actually used, per clause type. */
+function extractConnectorWord(answer: string, clauseType: string): string | null {
+  const wordMap: Record<string, RegExp> = {
+    finalsatz: /\b(damit|um)\b/i,
+    konzessivsatz: /\b(obwohl|trotzdem)\b/i,
+    temporalsatz: /\b(nachdem|bevor|als|wenn)\b/i,
+    relativsatz: /\b(der|die|das|den|dem|dessen|deren)\b/i,
+    konditionalsatz: /\b(wenn)\b/i,
+  };
+  const re = wordMap[clauseType.toLowerCase()];
+  const m = re ? answer.match(re) : null;
+  return m ? m[1] : null;
+}
+
+/** Check if a comma separates the two clauses */
+function hasClauseComma(answer: string): boolean {
+  return /\S,\s|\s,\s/.test(answer);
+}
+
+/** Heuristic: check verb position in subordinate clause (verb at end) */
+function verbAtEndOfSubclause(answer: string, connector: string): boolean {
+  // Split on the connector, get the subordinate clause (after connector)
+  const parts = answer.toLowerCase().split(new RegExp('\\b' + connector.toLowerCase() + '\\b'));
+  if (parts.length < 2) return false;
+  const subclause = parts[parts.length - 1].trim().replace(/[.!?]+$/, '');
+  const words = subclause.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return false;
+  // Last word should be a verb (rough check: ends in verb-like suffix)
+  const lastWord = words[words.length - 1];
+  return /(?:en|est|et|ern|ten|ste|st|t|bin|ist|sind|hat|hat|haben|war|wurde|worden|werden|können|müssen|soll|will|darf|mag)$/i.test(lastWord);
+}
+
+/** Check verb is in 2nd position in main clause */
+function verbInSecondPosition(mainClause: string): boolean {
+  const words = mainClause.trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return false;
+  // Word at index 1 (second word) should be a conjugated verb
+  const second = words[1];
+  return /(?:en|est|et|ern|ten|ste|st|t|bin|ist|sind|hat|haben|war|wurde|werden|kann|muss|soll|will|darf|mag|komme|gehe|fahre|laufe)$/i.test(second);
+}
+
+/** Split answer into main clause + subordinate clause halves around a connector. */
+function splitClauses(answer: string, connector: string): { main: string; sub: string } {
+  const idx = answer.toLowerCase().search(new RegExp('\\b' + connector.toLowerCase() + '\\b'));
+  if (idx === -1) return { main: answer, sub: "" };
+  // Connector at start → subordinate clause first, main clause after comma
+  const trimmedStart = answer.trim().toLowerCase();
+  if (trimmedStart.startsWith(connector.toLowerCase())) {
+    const commaIdx = answer.indexOf(",");
+    if (commaIdx !== -1) {
+      return { main: answer.slice(commaIdx + 1).trim(), sub: answer.slice(0, commaIdx).trim() };
+    }
+    return { main: "", sub: answer };
+  }
+  return { main: answer.slice(0, idx).trim(), sub: answer.slice(idx).trim() };
+}
+
+export function gradeSatzbau(params: {
+  studentAnswer: string;
+  referenceAnswer: string; // admin's correct answer
+  clauseType: string; // "finalsatz" | "konzessivsatz" | "temporalsatz" | "relativsatz" | "konditionalsatz"
+  points: number;
+  locale?: Locale;
+}): GradeResultV2 {
+  const { studentAnswer, clauseType, points, locale = "fr" } = params;
+
+  const noteMissingComma = {
+    fr: "La virgule manque.",
+    ar: "الفاصلة ناقصة.",
+    de: "Das Komma fehlt.",
+  };
+  const noteVerbPosition = {
+    fr: "La position du verbe est incorrecte.",
+    ar: "موضع الفعل غير صحيح.",
+    de: "Die Verbstellung ist nicht korrekt.",
+  };
+
+  const locText = (obj: { fr: string; ar: string; de: string }) =>
+    locale === "ar" ? obj.ar : locale === "de" ? obj.de : obj.fr;
+
+  if (!studentAnswer || !studentAnswer.trim()) {
+    return {
+      score: 0, maxScore: points, percentage: 0,
+      isCorrect: false, isPartial: false,
+      method: "rule", confidence: 0.9,
+      feedback_fr: locNote("wrong", locale, params.referenceAnswer),
+      feedback_de: deNote("wrong", params.referenceAnswer),
+      needsManualReview: false,
+    };
+  }
+
+  // Step 1: connector present?
+  if (!hasConnector(studentAnswer, clauseType)) {
+    return {
+      score: 0, maxScore: points, percentage: 0,
+      isCorrect: false, isPartial: false,
+      method: "rule", confidence: 0.85,
+      feedback_fr: locNote("wrong", locale, params.referenceAnswer),
+      feedback_de: deNote("wrong", params.referenceAnswer),
+      needsManualReview: false,
+    };
+  }
+
+  // Step 2: comma present?
+  if (!hasClauseComma(studentAnswer)) {
+    return {
+      score: points * 0.75, maxScore: points, percentage: 75,
+      isCorrect: false, isPartial: true,
+      method: "rule", confidence: 0.85,
+      feedback_fr: locText(noteMissingComma),
+      feedback_de: noteMissingComma.de,
+      needsManualReview: false,
+    };
+  }
+
+  // Step 3: verb positions correct?
+  const connector = extractConnectorWord(studentAnswer, clauseType) ?? "";
+  const { main, sub } = splitClauses(studentAnswer, connector);
+  const subOk = connector ? verbAtEndOfSubclause(studentAnswer, connector) : true;
+  const mainOk = main ? verbInSecondPosition(main) : true;
+
+  if (!subOk || !mainOk) {
+    return {
+      score: points * 0.5, maxScore: points, percentage: 50,
+      isCorrect: false, isPartial: true,
+      method: "rule", confidence: 0.8,
+      feedback_fr: locText(noteVerbPosition),
+      feedback_de: noteVerbPosition.de,
+      needsManualReview: false,
+    };
+  }
+
+  // All good — full score, no feedback
+  return {
+    score: points, maxScore: points, percentage: 100,
+    isCorrect: true, isPartial: false,
+    method: "rule", confidence: 0.9,
+    feedback_fr: "",
+    feedback_de: "",
+    needsManualReview: false,
+  };
+}
+
+const MODAL_VERBS_MAP: Record<string, string[]> = {
+  können: ["können", "kann", "kannst", "könnt", "könnte", "könnten", "könntest"],
+  müssen: ["müssen", "muss", "musst", "müsst", "müsste", "müssten", "musste", "mussten"],
+  dürfen: ["dürfen", "darf", "darfst", "dürft", "dürfte", "dürften"],
+  sollen: ["sollen", "soll", "sollst", "sollt", "sollte", "sollten"],
+  wollen: ["wollen", "will", "willst", "wollt", "wollte", "wollten"],
+  mögen: ["mögen", "mag", "magst", "mögt", "möchte", "möchten"],
+  lassen: ["lassen", "lässt", "lasst", "ließ", "ließen"],
+};
+
+function findModalForms(correctModal: string): string[] {
+  const key = Object.keys(MODAL_VERBS_MAP).find(
+    (k) => k === correctModal.toLowerCase() || MODAL_VERBS_MAP[k].includes(correctModal.toLowerCase())
+  );
+  return key ? MODAL_VERBS_MAP[key] : [correctModal.toLowerCase()];
+}
+
+export function gradeModalverb(params: {
+  studentAnswer: string;
+  referenceAnswer: string;
+  correctModal: string; // e.g. "können", "müssen"
+  points: number;
+  locale?: Locale;
+}): GradeResultV2 {
+  const { studentAnswer, referenceAnswer, correctModal, points, locale = "fr" } = params;
+
+  const noteWrongModal = {
+    fr: "Mauvais verbe modal.",
+    ar: "فعل مساعد (Modalverb) خاطئ.",
+    de: "Falsches Modalverb.",
+  };
+  const noteExtra = {
+    fr: "Ne pas ajouter de virgule / zu après le verbe modal.",
+    ar: "لا تضف فاصلة / zu بعد الفعل المساعد.",
+    de: "Kein Komma / zu nach dem Modalverb hinzufügen.",
+  };
+  const noteConjugation = {
+    fr: "La conjugaison du verbe modal est incorrecte.",
+    ar: "تصريف الفعل المساعد غير صحيح.",
+    de: "Die Konjugation des Modalverbs ist nicht korrekt.",
+  };
+  const locText = (obj: { fr: string; ar: string; de: string }) =>
+    locale === "ar" ? obj.ar : locale === "de" ? obj.de : obj.fr;
+
+  if (!studentAnswer || !studentAnswer.trim()) {
+    return {
+      score: 0, maxScore: points, percentage: 0,
+      isCorrect: false, isPartial: false,
+      method: "rule", confidence: 0.9,
+      feedback_fr: locNote("wrong", locale, referenceAnswer),
+      feedback_de: deNote("wrong", referenceAnswer),
+      needsManualReview: false,
+    };
+  }
+
+  const forms = findModalForms(correctModal);
+  const studentLower = studentAnswer.toLowerCase();
+
+  // Which conjugated form (if any) is present in the student's answer?
+  const foundForm = forms.find((f) => new RegExp(`\\b${f}\\b`, "i").test(studentLower));
+
+  if (!foundForm) {
+    return {
+      score: 0, maxScore: points, percentage: 0,
+      isCorrect: false, isPartial: false,
+      method: "rule", confidence: 0.85,
+      feedback_fr: locText(noteWrongModal),
+      feedback_de: noteWrongModal.de,
+      needsManualReview: false,
+    };
+  }
+
+  // Extra comma or "zu" directly following the modal verb?
+  const extraPattern = new RegExp(`\\b${foundForm}\\b\\s*(,|zu\\b)`, "i");
+  if (extraPattern.test(studentAnswer)) {
+    return {
+      score: points * 0.5, maxScore: points, percentage: 50,
+      isCorrect: false, isPartial: true,
+      method: "rule", confidence: 0.8,
+      feedback_fr: locText(noteExtra),
+      feedback_de: noteExtra.de,
+      needsManualReview: false,
+    };
+  }
+
+  // Compare the conjugated form used vs. what the reference answer expects.
+  const refLower = referenceAnswer.toLowerCase();
+  const refForm = forms.find((f) => new RegExp(`\\b${f}\\b`, "i").test(refLower));
+  if (refForm && refForm !== foundForm) {
+    return {
+      score: points * 0.5, maxScore: points, percentage: 50,
+      isCorrect: false, isPartial: true,
+      method: "rule", confidence: 0.75,
+      feedback_fr: locText(noteConjugation),
+      feedback_de: noteConjugation.de,
+      needsManualReview: false,
+    };
+  }
+
+  return {
+    score: points, maxScore: points, percentage: 100,
+    isCorrect: true, isPartial: false,
+    method: "rule", confidence: 0.9,
+    feedback_fr: "",
+    feedback_de: "",
+    needsManualReview: false,
+  };
+}
+
+/** Extract the most likely conjugated main verb from a sentence (heuristic). */
+function extractMainVerb(text: string): string | null {
+  const words = text
+    .trim()
+    .toLowerCase()
+    .replace(/[.,!?;:]+$/g, "")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return null;
+
+  // Prefer a known irregular verb form.
+  for (const w of words) {
+    const clean = w.replace(/[.,!?;:]+$/g, "");
+    if (GERMAN_IRREGULAR_VERBS[clean]) return clean;
+  }
+
+  // Fall back: word at index 1 (2nd position) often is the conjugated verb.
+  if (words.length > 1) {
+    const second = words[1].replace(/[.,!?;:]+$/g, "");
+    if (/(?:e|st|t|en|te|test|ten|tet|end)$/i.test(second)) return second;
+  }
+
+  // Fall back: last word (subordinate clause / verb-final position).
+  const last = words[words.length - 1].replace(/[.,!?;:]+$/g, "");
+  return last || null;
+}
+
+/** Resolve a verb form to its infinitive, using the irregular map or a naive strip. */
+function verbToInfinitive(form: string): string {
+  const lower = form.toLowerCase();
+  if (GERMAN_IRREGULAR_VERBS[lower]) return GERMAN_IRREGULAR_VERBS[lower];
+  return lower;
+}
+
+export function gradeTempus(params: {
+  studentAnswer: string;
+  referenceAnswer: string; // admin's correct answer with verb in right tense
+  targetTense: string; // "Präteritum" | "Präsens" | "Perfekt" | "Futur"
+  points: number; // 0.5 pt per question
+  locale?: Locale;
+}): GradeResultV2 {
+  const { studentAnswer, referenceAnswer, targetTense, points, locale = "fr" } = params;
+
+  const wrongTenseNote = (tense: string) => ({
+    fr: `Le verbe n'est pas conjugué au ${tense} correct.`,
+    ar: `الفعل غير مصرّف بشكل صحيح في زمن ${tense}.`,
+    de: `Das Verb ist nicht korrekt im ${tense} konjugiert.`,
+  });
+  const locText = (obj: { fr: string; ar: string; de: string }) =>
+    locale === "ar" ? obj.ar : locale === "de" ? obj.de : obj.fr;
+
+  if (!studentAnswer || !studentAnswer.trim()) {
+    const note = wrongTenseNote(targetTense);
+    return {
+      score: 0, maxScore: points, percentage: 0,
+      isCorrect: false, isPartial: false,
+      method: "rule", confidence: 0.9,
+      feedback_fr: locText(note),
+      feedback_de: note.de,
+      needsManualReview: false,
+    };
+  }
+
+  const studentVerb = extractMainVerb(studentAnswer);
+  const referenceVerb = extractMainVerb(referenceAnswer);
+
+  let verbMatches = false;
+  if (studentVerb && referenceVerb) {
+    if (studentVerb === referenceVerb) {
+      verbMatches = true;
+    } else {
+      // Same infinitive root (via irregular map)?
+      const studInf = verbToInfinitive(studentVerb);
+      const refInf = verbToInfinitive(referenceVerb);
+      if (studInf === refInf && studentVerb.length > 0) {
+        // same root — check exact conjugated form for tense correctness
+        verbMatches = studentVerb === referenceVerb;
+        // allow a very close typo (edit distance 1) on longer forms
+        if (!verbMatches && Math.max(studentVerb.length, referenceVerb.length) > 4) {
+          verbMatches = levenshteinDistance(studentVerb, referenceVerb) <= 1;
+        }
+      } else {
+        // Different roots but still very close spelling -> minor typo tolerance
+        verbMatches = levenshteinDistance(studentVerb, referenceVerb) <= 1 && studentVerb.length > 3;
+      }
+    }
+  }
+
+  if (!verbMatches) {
+    const note = wrongTenseNote(targetTense);
+    return {
+      score: 0, maxScore: points, percentage: 0,
+      isCorrect: false, isPartial: false,
+      method: "rule", confidence: 0.8,
+      feedback_fr: locText(note),
+      feedback_de: note.de,
+      needsManualReview: false,
+    };
+  }
+
+  // Verb form correct — now check position (2nd position in main clause).
+  const posOk = verbInSecondPosition(studentAnswer);
+  if (!posOk) {
+    return {
+      score: round2(points - 0.125), maxScore: points, percentage: round2(((points - 0.125) / points) * 100),
+      isCorrect: false, isPartial: true,
+      method: "rule", confidence: 0.75,
+      feedback_fr: locale === "ar" ? "موضع الفعل غير صحيح في الجملة." : "La position du verbe dans la phrase est incorrecte.",
+      feedback_de: "Die Verbstellung im Satz ist nicht korrekt.",
+      needsManualReview: false,
+    };
+  }
+
+  return {
+    score: points, maxScore: points, percentage: 100,
+    isCorrect: true, isPartial: false,
+    method: "rule", confidence: 0.9,
+    feedback_fr: "",
+    feedback_de: "",
+    needsManualReview: false,
+  };
+}
+
+/** Detect passive voice: "werden" auxiliary + past participle (-t / -en). */
+function isPassiveVoice(text: string): boolean {
+  const words = text.toLowerCase().split(/\s+/).filter(Boolean);
+  const hasWerdenAux = words.some((w) =>
+    ["werde", "wirst", "wird", "werdet", "werden", "wurde", "wurdest", "wurden", "wurdet", "worden"].includes(
+      w.replace(/[.,!?;:]+$/, "")
+    )
+  );
+  if (!hasWerdenAux) return false;
+  const hasParticiple = words.some((w) => {
+    const clean = w.replace(/[.,!?;:]+$/, "");
+    return /^ge.*(t|en)$/.test(clean) || /(t|en)$/.test(clean) && clean.length > 3;
+  });
+  return hasWerdenAux && hasParticiple;
+}
+
+export function gradeAktivPassiv(params: {
+  studentAnswer: string;
+  referenceAnswer: string;
+  direction: "aktiv" | "passiv";
+  points: number; // 1 pt
+  locale?: Locale;
+}): GradeResultV2 {
+  const { studentAnswer, referenceAnswer, direction, points, locale = "fr" } = params;
+
+  const noteWrongVoice = {
+    fr: "La voix (actif/passif) n'est pas correcte.",
+    ar: "الصيغة (فعل مبني للمعلوم/فعل مبني للمجهول) غير صحيحة.",
+    de: "Die Stimme (Aktiv/Passiv) ist nicht korrekt.",
+  };
+  const locText = (obj: { fr: string; ar: string; de: string }) =>
+    locale === "ar" ? obj.ar : locale === "de" ? obj.de : obj.fr;
+
+  if (!studentAnswer || !studentAnswer.trim()) {
+    return {
+      score: 0, maxScore: points, percentage: 0,
+      isCorrect: false, isPartial: false,
+      method: "rule", confidence: 0.9,
+      feedback_fr: locText(noteWrongVoice),
+      feedback_de: noteWrongVoice.de,
+      needsManualReview: false,
+    };
+  }
+
+  const studentIsPassive = isPassiveVoice(studentAnswer);
+  const voiceCorrect = direction === "passiv" ? studentIsPassive : !studentIsPassive;
+
+  if (!voiceCorrect) {
+    return {
+      score: 0, maxScore: points, percentage: 0,
+      isCorrect: false, isPartial: false,
+      method: "rule", confidence: 0.85,
+      feedback_fr: locText(noteWrongVoice),
+      feedback_de: noteWrongVoice.de,
+      needsManualReview: false,
+    };
+  }
+
+  // Voice structure is correct — now check verb correctness vs reference.
+  const studentVerb = extractMainVerb(studentAnswer);
+  const referenceVerb = extractMainVerb(referenceAnswer);
+  const verbOk =
+    !!studentVerb &&
+    !!referenceVerb &&
+    (studentVerb === referenceVerb ||
+      verbToInfinitive(studentVerb) === verbToInfinitive(referenceVerb));
+
+  if (!verbOk) {
+    return {
+      score: points * 0.5, maxScore: points, percentage: 50,
+      isCorrect: false, isPartial: true,
+      method: "rule", confidence: 0.75,
+      feedback_fr: locale === "ar" ? "الفعل غير صحيح لكن البنية صحيحة." : "Le verbe est incorrect mais la structure est correcte.",
+      feedback_de: "Das Verb ist falsch, aber die Struktur ist korrekt.",
+      needsManualReview: false,
+    };
+  }
+
+  return {
+    score: points, maxScore: points, percentage: 100,
+    isCorrect: true, isPartial: false,
+    method: "rule", confidence: 0.9,
+    feedback_fr: "",
+    feedback_de: "",
+    needsManualReview: false,
+  };
+}
+
 export async function gradeAnswerV2(params: {
   questionType: string;
   studentAnswer: string | Record<string, any>;
@@ -1158,6 +1638,62 @@ export async function gradeAnswerV2(params: {
     return gradeFragenZumText({
       studentAnswer,
       referenceAnswer,
+      points,
+      locale,
+    });
+  }
+
+  // ── GRAMMATIK: Tempus (dedicated grader) ────────────────────────────────────
+  if (questionType === "grammatik_tempus") {
+    const meta = typeof params.studentAnswer === "object" && params.studentAnswer !== null
+      ? (params.studentAnswer as Record<string, any>)
+      : {};
+    return gradeTempus({
+      studentAnswer,
+      referenceAnswer,
+      targetTense: meta.targetTense ?? meta.tense ?? "Präteritum",
+      points,
+      locale,
+    });
+  }
+
+  // ── GRAMMATIK: Aktiv/Passiv (dedicated grader) ──────────────────────────────
+  if (questionType === "grammatik_aktiv_passiv") {
+    const meta = typeof params.studentAnswer === "object" && params.studentAnswer !== null
+      ? (params.studentAnswer as Record<string, any>)
+      : {};
+    return gradeAktivPassiv({
+      studentAnswer,
+      referenceAnswer,
+      direction: meta.direction ?? "passiv",
+      points,
+      locale,
+    });
+  }
+
+  // ── GRAMMATIK: Satzbau / Satzverbindung (dedicated grader) ──────────────────
+  if (questionType === "grammatik_satzbau") {
+    const meta = typeof params.studentAnswer === "object" && params.studentAnswer !== null
+      ? (params.studentAnswer as Record<string, any>)
+      : {};
+    return gradeSatzbau({
+      studentAnswer,
+      referenceAnswer,
+      clauseType: meta.clauseType ?? "temporalsatz",
+      points,
+      locale,
+    });
+  }
+
+  // ── GRAMMATIK: Modalverb (dedicated grader) ─────────────────────────────────
+  if (questionType === "grammatik_modalverb") {
+    const meta = typeof params.studentAnswer === "object" && params.studentAnswer !== null
+      ? (params.studentAnswer as Record<string, any>)
+      : {};
+    return gradeModalverb({
+      studentAnswer,
+      referenceAnswer,
+      correctModal: meta.correctModal ?? meta.modal ?? "können",
       points,
       locale,
     });
