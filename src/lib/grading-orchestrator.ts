@@ -8,6 +8,15 @@
 import { supabase } from "./supabase";
 import { gradeAnswerV2 } from "./grading-engine-v2";
 import type { GradeResultV2, Locale } from "./grading-engine-v2";
+import {
+  correctAnswer as gradeWithNewEngine,
+  createFullyLoadedEngine,
+  translateFeedback,
+} from "./eval-engine/adapters/lovable/index.ts";
+import type {
+  BacExamQuestion as NewEngineQuestion,
+  LovableCorrectionResult,
+} from "./eval-engine/adapters/lovable/index.ts";
 
 // ---------------------------------------------------------------------------
 // Re-export for backward compatibility with code that imports GradeResult
@@ -21,6 +30,74 @@ export interface ExamGradingResult {
   percentage: number;
   questionResults: Record<string, GradeResultV2>;
   gradedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// New grading engine integration.
+//
+// bac_types below are routed to the new German Evaluation Engine
+// (vendored at ./eval-engine, copied verbatim from the standalone,
+// independently-tested package -- see its own README for what's covered).
+// This set is exactly the types confirmed ready this migration pass: no
+// known content-schema blocker, and either directly V1-behavior-parity
+// tested (kombinieren, ergaenzen, wortableitung) or already covered by the
+// engine's own test suite (everything else listed). Every other bac_type
+// keeps grading through gradeAnswerV2 exactly as before -- zero behavior
+// change for those.
+//
+// Deliberately NOT routed yet (kept on gradeAnswerV2):
+//   - uebersetzung: the new engine's profile is untested against the real
+//     target language (Arabic); V2's existing Arabic-specific normalization
+//     stays authoritative until that capability is built.
+//   - grammatik_tempus, grammatik_modalverb, grammatik_fragen_stellen: the
+//     new engine's profiles for these need an `answer_key` field that does
+//     not exist in today's real content yet (grammatik_tempus's Perfekt
+//     case is the sole exception but is not split out here to avoid
+//     per-tense branching in this pass -- the whole type stays on V2 for
+//     now, matching every other tense case's already-working behavior).
+// ---------------------------------------------------------------------------
+const { engine: newEngine } = createFullyLoadedEngine();
+
+const NEW_ENGINE_BAC_TYPES = new Set([
+  "synonym",
+  "gegenteil",
+  "titel",
+  "richtig_falsch_zitat",
+  "fragen_zum_text",
+  "kombinieren",
+  "ergaenzen",
+  "wortableitung",
+  "kompositum_bilden",
+  "kompositum_loesen",
+  "grammatik_aktiv_passiv",
+  "grammatik_konnektoren",
+  "grammatik_deklination",
+  "grammatik_satzbau",
+]);
+
+/** Map the new engine's adapter output into the exact GradeResultV2 shape this orchestrator already persists and accumulates. */
+function toGradeResultV2(result: LovableCorrectionResult): GradeResultV2 {
+  const feedback_fr = translateFeedback(result.feedback, "fr");
+  const feedback_de = translateFeedback(result.feedback, "de");
+  const method: GradeResultV2["method"] = result.manual
+    ? "manual"
+    : result.strategy === "structural"
+      ? "rule"
+      : result.strategy === "semantic"
+        ? "semantic"
+        : "exact";
+  return {
+    score: result.score,
+    maxScore: result.maxScore,
+    percentage: result.maxScore > 0 ? Math.round((result.score / result.maxScore) * 10000) / 100 : 0,
+    isCorrect: result.isCorrect,
+    isPartial: result.isPartial,
+    method,
+    confidence: result.manual ? 0 : 1,
+    feedback_fr,
+    feedback_de,
+    needsManualReview: result.manual,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -272,22 +349,41 @@ export async function gradeExamAttempt(
     let gradedMethod = "auto";
 
     try {
-      const gp = extractGradingParams(question);
+      const bacType: string = (question.content as { bac_type?: string } | null)?.bac_type ?? question.type;
 
-      result = await gradeAnswerV2({
-        questionType: gp.questionType,
-        studentAnswer: answer.response,
-        referenceAnswer: gp.referenceAnswer,
-        acceptedVariants: gp.acceptedVariants,
-        requiredKeywords: gp.requiredKeywords,
-        points: question.points,
-        locale,
-        // Pass grammatik-specific metadata via extra fields (picked up by graders)
-        ...(gp.targetTense ? { targetTense: gp.targetTense } : {}),
-        ...(gp.direction ? { direction: gp.direction } : {}),
-        ...(gp.clauseType ? { clauseType: gp.clauseType } : {}),
-        ...(gp.correctModal ? { correctModal: gp.correctModal } : {}),
-      } as any);
+      if (NEW_ENGINE_BAC_TYPES.has(bacType)) {
+        // -- New German Evaluation Engine path --------------------------
+        const adaptedQuestion: NewEngineQuestion = {
+          id: question.id,
+          type: question.type,
+          bac_content: question.content,
+          prompt_fr: question.prompt_fr ?? "",
+          prompt_de: "",
+          points: question.points,
+          grade_method: (question.grade_method as NewEngineQuestion["grade_method"]) ?? "auto",
+          order_index: question.order_index,
+        };
+        const newResult = gradeWithNewEngine(newEngine, adaptedQuestion, answer.response);
+        result = toGradeResultV2(newResult);
+      } else {
+        // -- Existing V2 path (unchanged) --------------------------------
+        const gp = extractGradingParams(question);
+
+        result = await gradeAnswerV2({
+          questionType: gp.questionType,
+          studentAnswer: answer.response,
+          referenceAnswer: gp.referenceAnswer,
+          acceptedVariants: gp.acceptedVariants,
+          requiredKeywords: gp.requiredKeywords,
+          points: question.points,
+          locale,
+          // Pass grammatik-specific metadata via extra fields (picked up by graders)
+          ...(gp.targetTense ? { targetTense: gp.targetTense } : {}),
+          ...(gp.direction ? { direction: gp.direction } : {}),
+          ...(gp.clauseType ? { clauseType: gp.clauseType } : {}),
+          ...(gp.correctModal ? { correctModal: gp.correctModal } : {}),
+        } as any);
+      }
 
       gradedMethod = result.method ?? "auto";
     } catch (err) {
