@@ -308,7 +308,7 @@ function StudentExamPage() {
             statements={c.statements}
             onAnswersChange={(a) => updateAnswer(q.id, a)}
             showResults={submitted}
-            results={results[q.id]}
+            results={questionResults[q.id]}
           />
         );
       }
@@ -327,7 +327,7 @@ function StudentExamPage() {
             ]}
             onAnswersChange={(a) => updateAnswer(q.id, a)}
             showResults={submitted}
-            results={results[q.id]}
+            results={questionResults[q.id]}
           />
         );
       }
@@ -363,7 +363,7 @@ function StudentExamPage() {
             accepted_titles={c.accepted_titles}
             onAnswerChange={(a) => updateAnswer(q.id, a)}
             showResults={submitted}
-            result={results[q.id]}
+            result={questionResults[q.id]}
           />
         );
       }
@@ -383,7 +383,7 @@ function StudentExamPage() {
             points={q.points}
             onAnswerChange={(a) => updateAnswer(q.id, a)}
             showResults={submitted}
-            result={results[q.id]}
+            result={questionResults[q.id]}
           />
         );
       }
@@ -397,7 +397,7 @@ function StudentExamPage() {
             points={q.points}
             onAnswerChange={(a) => updateAnswer(q.id, a)}
             showResults={submitted}
-            result={results[q.id]}
+            result={questionResults[q.id]}
           />
         );
       }
@@ -460,7 +460,7 @@ function StudentExamPage() {
             points={q.points}
             onAnswerChange={(a) => updateAnswer(q.id, a)}
             showResults={submitted}
-            result={results[q.id]}
+            result={questionResults[q.id]}
           />
         );
       }
@@ -476,7 +476,7 @@ function StudentExamPage() {
             points={q.points}
             onAnswerChange={(a) => updateAnswer(q.id, a)}
             showResults={submitted}
-            result={results[q.id]}
+            result={questionResults[q.id]}
           />
         );
       }
@@ -493,7 +493,7 @@ function StudentExamPage() {
             points={q.points}
             onAnswerChange={(a) => updateAnswer(q.id, a)}
             showResults={submitted}
-            result={results[q.id]}
+            result={questionResults[q.id]}
           />
         );
       }
@@ -509,7 +509,7 @@ function StudentExamPage() {
             points={q.points}
             onAnswerChange={(a) => updateAnswer(q.id, a)}
             showResults={submitted}
-            result={results[q.id]}
+            result={questionResults[q.id]}
           />
         );
       }
@@ -525,7 +525,7 @@ function StudentExamPage() {
             points={q.points}
             onAnswerChange={(a) => updateAnswer(q.id, a)}
             showResults={submitted}
-            result={results[q.id]}
+            result={questionResults[q.id]}
           />
         );
       }
@@ -541,7 +541,7 @@ function StudentExamPage() {
             points={q.points}
             onAnswerChange={(a) => updateAnswer(q.id, a)}
             showResults={submitted}
-            result={results[q.id]}
+            result={questionResults[q.id]}
           />
         );
       }
@@ -557,7 +557,7 @@ function StudentExamPage() {
             points={q.points}
             onAnswerChange={(a) => updateAnswer(q.id, a)}
             showResults={submitted}
-            result={results[q.id]}
+            result={questionResults[q.id]}
           />
         );
       }
